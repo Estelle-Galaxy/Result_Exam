@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Result Management System</title>
+
+    <!-- Firebase SDKs (Compat Mode) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <!-- External Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- ==================== LOADING OVERLAY ==================== -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-box">
+            <div class="spinner"></div>
+            <p style="color:#5f6368;font-weight:600;">Processing...</p>
+        </div>
+    </div>
+
+    <!-- ==================== TOAST CONTAINER ==================== -->
+    <div id="toastContainer"></div>
+
+    <!-- ==================== APP CONTAINER ==================== -->
+    <div class="app-container" id="appContainer">
+
+        <!-- ========== PAGE: MAIN (Role Selection) ========== -->
+        <div class="page active" id="page-main">
+            <div class="card">
+                <div class="app-logo">
+                    <div class="icon-circle">🎓</div>
+                </div>
+                <h1 class="app-title">School Result Portal</h1>
+                <p class="app-subtitle">Select your role to continue</p>
+                <div class="btn-group" style="margin-bottom: 12px;">
+                    <button class="btn btn-primary" onclick="navigateTo('student-login')">🧑‍🎓 I'm a Student</button>
+                    <button class="btn btn-accent" onclick="navigateTo('teacher-login')">👩‍🏫 I'm a Teacher</button>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-outline" onclick="navigateTo('register-student')">📝 Register Student</button>
+                    <button class="btn btn-outline" onclick="navigateTo('register-teacher')">📋 Register Teacher</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== PAGE: Student Login ========== -->
+        <div class="page" id="page-student-login">
+            <div class="card">
+                <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
+                <h2 class="app-title">Student Login</h2>
+                <p class="app-subtitle">Enter your Identification Number & Password</p>
+                <form id="studentLoginForm" onsubmit="handleStudentLogin(event)">
+                    <div class="form-group">
+                        <label for="studentIdInput">Identification Number</label>
+                        <input type="text" id="studentIdInput" placeholder="e.g. S2024001" required autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="studentPasswordInput">Password</label>
+                        <input type="password" id="studentPasswordInput" placeholder="Enter your password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="studentLoginBtn">🔑 Login</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ========== PAGE: Student Results ========== -->
+        <div class="page" id="page-student-results">
+            <div class="card wide">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+                    <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout('student')">← Logout</button>
+                    <span style="font-weight:700;" id="studentNameDisplay"></span>
+                </div>
+                <h2 class="app-title">📊 My Examination Results</h2>
+                <p class="app-subtitle" id="studentIdDisplay"></p>
+                <div id="studentResultsContent">
+                    <p style="text-align:center;color:var(--text-light);">Loading results...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== PAGE: Teacher Login ========== -->
+        <div class="page" id="page-teacher-login">
+            <div class="card">
+                <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
+                <h2 class="app-title">Teacher Login</h2>
+                <p class="app-subtitle">Enter your Staff Number & Password</p>
+                <form id="teacherLoginForm" onsubmit="handleTeacherLogin(event)">
+                    <div class="form-group">
+                        <label for="teacherStaffInput">Staff Number</label>
+                        <input type="text" id="teacherStaffInput" placeholder="e.g. T2024001" required autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="teacherPasswordInput">Password</label>
+                        <input type="password" id="teacherPasswordInput" placeholder="Enter your password" required>
+                    </div>
+                    <button type="submit" class="btn btn-accent" id="teacherLoginBtn">🔑 Login</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ========== PAGE: Teacher Dashboard ========== -->
+        <div class="page" id="page-teacher-dashboard">
+            <div class="card wide">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+                    <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout('teacher')">← Logout</button>
+                    <span style="font-weight:700;" id="teacherNameDisplay"></span>
+                </div>
+                <h2 class="app-title">📚 Select a Class</h2>
+                <p class="app-subtitle">Choose a class to manage student results</p>
+                <div id="classListContent">
+                    <p style="text-align:center;color:var(--text-light);">Loading classes...</p>
+                </div>
+                <div style="margin-top:16px;">
+                    <button class="btn btn-outline btn-sm btn-auto" onclick="showAddClassModal()">+ Add New Class</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== PAGE: Teacher Class Management ========== -->
+        <div class="page" id="page-teacher-class">
+            <div class="card wide">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+                    <button class="btn btn-sm btn-outline btn-auto" onclick="navigateTo('teacher-dashboard')">← Back to Classes</button>
+                    <span style="font-weight:700;" id="currentClassName"></span>
+                </div>
+                <h2 class="app-title">👨‍🎓 Students in <span id="classNameInline"></span></h2>
+                <p class="app-subtitle">Click "Add/Edit Results" to manage examination scores</p>
+                <div id="classStudentsContent">
+                    <p style="text-align:center;color:var(--text-light);">Loading students...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== PAGE: Register Student ========== -->
+        <div class="page" id="page-register-student">
+            <div class="card">
+                <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
+                <h2 class="app-title">📝 Register Student</h2>
+                <p class="app-subtitle">Create a new student account or update existing</p>
+                <form id="registerStudentForm" onsubmit="handleRegisterStudent(event)">
+                    <div class="form-group">
+                        <label for="regStudentName">Full Name</label>
+                        <input type="text" id="regStudentName" placeholder="Enter student's full name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="regStudentId">Identification Number</label>
+                        <input type="text" id="regStudentId" placeholder="e.g. S2024001" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="regStudentClass">Class</label>
+                        <select id="regStudentClass" required>
+                            <option value="">-- Select Class --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="regStudentPassword">Password</label>
+                        <input type="password" id="regStudentPassword" placeholder="Create a password" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="regStudentBtn">💾 Register / Update Student</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ========== PAGE: Register Teacher ========== -->
+        <div class="page" id="page-register-teacher">
+            <div class="card">
+                <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
+                <h2 class="app-title">📋 Register Teacher</h2>
+                <p class="app-subtitle">Create a new teacher account or update existing</p>
+                <form id="registerTeacherForm" onsubmit="handleRegisterTeacher(event)">
+                    <div class="form-group">
+                        <label for="regTeacherName">Full Name</label>
+                        <input type="text" id="regTeacherName" placeholder="Enter teacher's full name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="regTeacherStaff">Staff Number</label>
+                        <input type="text" id="regTeacherStaff" placeholder="e.g. T2024001" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="regTeacherPassword">Password</label>
+                        <input type="password" id="regTeacherPassword" placeholder="Create a password" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-accent" id="regTeacherBtn">💾 Register / Update Teacher</button>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ==================== MODAL: Add/Edit Result ==================== -->
+    <div class="modal-overlay" id="resultModalOverlay">
+        <div class="modal" id="resultModal">
+            <button class="modal-close" onclick="closeResultModal()">✕</button>
+            <h3 id="resultModalTitle">Add / Edit Result</h3>
+            <form id="resultForm" onsubmit="handleSaveResult(event)">
+                <input type="hidden" id="resultStudentId">
+                <input type="hidden" id="resultClassName">
+                <div class="form-group">
+                    <label for="resultSubject">Subject</label>
+                    <select id="resultSubject" required>
+                        <option value="">-- Select Subject --</option>
+                        <option value="Mathematics">Mathematics</option>
+                        <option value="English Language">English Language</option>
+                        <option value="Science">Science</option>
+                        <option value="Social Studies">Social Studies</option>
+                        <option value="Computer Studies">Computer Studies</option>
+                        <option value="History">History</option>
+                        <option value="Geography">Geography</option>
+                        <option value="Literature">Literature</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="resultTerm">Term</label>
+                    <select id="resultTerm" required>
+                        <option value="">-- Select Term --</option>
+                        <option value="First Term">First Term</option>
+                        <option value="Second Term">Second Term</option>
+                        <option value="Third Term">Third Term</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="resultMarks">Marks (0-100)</label>
+                    <input type="number" id="resultMarks" placeholder="Enter marks" min="0" max="100" required>
+                </div>
+                <button type="submit" class="btn btn-primary">💾 Save Result</button>
+            </form>
+            <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px;">
+                <h4 style="margin-bottom:8px;">Existing Results</h4>
+                <div id="existingResultsList" style="max-height:200px;overflow-y:auto;">
+                    <p style="color:var(--text-light);font-size:0.85rem;">No results yet.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: Add Class ==================== -->
+    <div class="modal-overlay" id="addClassModalOverlay">
+        <div class="modal" id="addClassModal">
+            <button class="modal-close" onclick="closeAddClassModal()">✕</button>
+            <h3>Add New Class</h3>
+            <form id="addClassForm" onsubmit="handleAddClass(event)">
+                <div class="form-group">
+                    <label for="newClassName">Class Name</label>
+                    <input type="text" id="newClassName" placeholder="e.g. Grade 10A, Form 3B" required>
+                </div>
+                <button type="submit" class="btn btn-accent">➕ Create Class</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== SCRIPTS (unchanged) ==================== -->
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+        apiKey: "AIzaSyCBjA_xaSAJdweodUsEMzvGY5R69I3esgE",
+        authDomain: "resultexam-25f4e.firebaseapp.com",
+        databaseURL: "https://resultexam-25f4e-default-rtdb.firebaseio.com",
+        projectId: "resultexam-25f4e",
+        storageBucket: "resultexam-25f4e.firebasestorage.app",
+        messagingSenderId: "1090858219421",
+        appId: "1:1090858219421:web:da3e3ddd4ab18027f06174",
+        measurementId: "G-RJ02VST99R"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // ==================== UTILITY FUNCTIONS ====================
+
+        // Show loading overlay
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.add('active');
+        }
+
+        // Hide loading overlay
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('active');
+        }
+
+        // Show toast notification
+        function showToast(message, type = 'info') {
+            const toastContainer = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `${message}`;
+            toastContainer.appendChild(toast);
+            setTimeout(() => {
+                toast.remove();
+            }, 4000);
+        }
+
+        // Navigate between pages
+        function navigateTo(pageId) {
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+            // Show target page
+            document.getElementById(`page-${pageId}`).classList.add('active');
+        }
+
+        // ==================== AUTHENTICATION FUNCTIONS ====================
+
+        // Handle student login
+        async function handleStudentLogin(event) {
+            event.preventDefault();
+            const studentId = document.getElementById('studentIdInput').value.trim();
+            const password = document.getElementById('studentPasswordInput').value;
+
+            if (!studentId || !password) {
+                showToast('Please fill in all fields', 'error');
+                return;
+            }
+
+            showLoading();
+            try {
+                const snapshot = await database.ref('students/' + studentId).once('value');
+                const studentData = snapshot.val();
+
+                if (studentData && studentData.password === password) {
+                    // Store session
+                    sessionStorage.setItem('userType', 'student');
+                    sessionStorage.setItem('userId', studentId);
+                    sessionStorage.setItem('userName', studentData.name);
+
+                    // Update UI
+                    document.getElementById('studentNameDisplay').textContent = studentData.name;
+                    document.getElementById('studentIdDisplay').textContent = `ID: ${studentId}`;
+
+                    // Load results
+                    loadStudentResults(studentId);
+
+                    // Navigate
+                    navigateTo('student-results');
+                    showToast('Login successful!', 'success');
+                } else {
+                    showToast('Invalid credentials', 'error');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showToast('Login failed. Please try again.', 'error');
+            }
+            hideLoading();
+        }
+
+        // Handle teacher login
+        async function handleTeacherLogin(event) {
+            event.preventDefault();
+            const staffId = document.getElementById('teacherStaffInput').value.trim();
+            const password = document.getElementById('teacherPasswordInput').value;
+
+            if (!staffId || !password) {
+                showToast('Please fill in all fields', 'error');
+                return;
+            }
+
+            showLoading();
+            try {
+                const snapshot = await database.ref('teachers/' + staffId).once('value');
+                const teacherData = snapshot.val();
+
+                if (teacherData && teacherData.password === password) {
+                    // Store session
+                    sessionStorage.setItem('userType', 'teacher');
+                    sessionStorage.setItem('userId', staffId);
+                    sessionStorage.setItem('userName', teacherData.name);
+
+                    // Update UI
+                    document.getElementById('teacherNameDisplay').textContent = teacherData.name;
+
+                    // Load classes
+                    loadTeacherClasses();
+
+                    // Navigate
+                    navigateTo('teacher-dashboard');
+                    showToast('Login successful!', 'success');
+                } else {
+                    showToast('Invalid credentials', 'error');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showToast('Login failed. Please try again.', 'error');
+            }
+            hideLoading();
+        }
+
+        // Handle logout
+        function handleLogout(userType) {
+            sessionStorage.clear();
+            navigateTo('main');
+            showToast('Logged out successfully', 'info');
+        }
+
+        // ==================== STUDENT FUNCTIONS ====================
+
+        // Load student results
+        async function loadStudentResults(studentId) {
+            const contentDiv = document.getElementById('studentResultsContent');
+            contentDiv.innerHTML = '<p style="text-align:center;color:var(--text-light);">Loading results...</p>';
+
+            try {
+                const snapshot = await database.ref('results').orderByChild('studentId').equalTo(studentId).once('value');
+                const results = snapshot.val();
+
+                if (!results) {
+                    contentDiv.innerHTML = '<p style="text-align:center;color:var(--text-light);">No results found.</p>';
+                    return;
+                }
+
+                // Group results by term
+                const groupedResults = {};
+                Object.values(results).forEach(result => {
+                    if (!groupedResults[result.term]) {
+                        groupedResults[result.term] = [];
+                    }
+                    groupedResults[result.term].push(result);
+                });
+
+                let html = '';
+                for (const [term, termResults] of Object.entries(groupedResults)) {
+                    html += `<div style="margin-bottom:24px;">
+                        <h3 style="margin-bottom:12px;color:var(--primary);">${term}</h3>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Subject</th>
+                                        <th>Marks</th>
+                                        <th>Grade</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+
+                    termResults.forEach(result => {
+                        const grade = getGrade(result.marks);
+                        html += `<tr>
+                            <td>${result.subject}</td>
+                            <td>${result.marks}/100</td>
+                            <td><span class="badge badge-${grade.toLowerCase()}">${grade}</span></td>
+                        </tr>`;
+                    });
+
+                    html += `</tbody></table></div></div>`;
+                }
+
+                contentDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading results:', error);
+                contentDiv.innerHTML = '<p style="text-align:center;color:#ea4335;">Error loading results. Please try again.</p>';
+            }
+        }
+
+        // ==================== TEACHER FUNCTIONS ====================
+
+        // Load teacher classes
+        async function loadTeacherClasses() {
+            const contentDiv = document.getElementById('classListContent');
+            contentDiv.innerHTML = '<p style="text-align:center;color:var(--text-light);">Loading classes...</p>';
+
+            try {
+                const snapshot = await database.ref('classes').once('value');
+                const classes = snapshot.val();
+
+                if (!classes) {
+                    contentDiv.innerHTML = '<p style="text-align:center;color:var(--text-light);">No classes found. Create your first class below.</p>';
+                    return;
+                }
+
+                let html = '<div class="btn-group" style="flex-direction:column;gap:8px;">';
+                Object.keys(classes).forEach(className => {
+                    html += `<button class="btn btn-outline" onclick="selectClass('${className}')">${className}</button>`;
+                });
+                html += '</div>';
+
+                contentDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading classes:', error);
+                contentDiv.innerHTML = '<p style="text-align:center;color:#ea4335;">Error loading classes. Please try again.</p>';
+            }
+        }
+
+        // Select a class
+        function selectClass(className) {
+            sessionStorage.setItem('currentClass', className);
+            document.getElementById('currentClassName').textContent = className;
+            document.getElementById('classNameInline').textContent = className;
+            loadClassStudents(className);
+            navigateTo('teacher-class');
+        }
+
+        // Load students in a class
+        async function loadClassStudents(className) {
+            const contentDiv = document.getElementById('classStudentsContent');
+            contentDiv.innerHTML = '<p style="text-align:center;color:var(--text-light);">Loading students...</p>';
+
+            try {
+                const snapshot = await database.ref('students').orderByChild('class').equalTo(className).once('value');
+                const students = snapshot.val();
+
+                if (!students) {
+                    contentDiv.innerHTML = '<p style="text-align:center;color:var(--text-light);">No students in this class.</p>';
+                    return;
+                }
+
+                let html = '<div class="table-wrapper"><table><thead><tr><th>Student ID</th><th>Name</th><th>Actions</th></tr></thead><tbody>';
+                Object.entries(students).forEach(([id, student]) => {
+                    html += `<tr>
+                        <td>${id}</td>
+                        <td>${student.name}</td>
+                        <td>
+                            <button class="btn btn-xs btn-primary" onclick="showResultModal('${id}', '${student.name}', '${className}')">Add/Edit Results</button>
+                        </td>
+                    </tr>`;
+                });
+                html += '</tbody></table></div>';
+
+                contentDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading students:', error);
+                contentDiv.innerHTML = '<p style="text-align:center;color:#ea4335;">Error loading students. Please try again.</p>';
+            }
+        }
+
+        // ==================== RESULT MANAGEMENT ====================
+
+        // Show result modal
+        async function showResultModal(studentId, studentName, className) {
+            document.getElementById('resultStudentId').value = studentId;
+            document.getElementById('resultClassName').value = className;
+            document.getElementById('resultModalTitle').textContent = `Add / Edit Result for ${studentName}`;
+
+            // Load existing results
+            loadExistingResults(studentId);
+
+            document.getElementById('resultModalOverlay').classList.add('active');
+        }
+
+        // Close result modal
+        function closeResultModal() {
+            document.getElementById('resultModalOverlay').classList.remove('active');
+            document.getElementById('resultForm').reset();
+        }
+
+        // Load existing results for a student
+        async function loadExistingResults(studentId) {
+            const listDiv = document.getElementById('existingResultsList');
+
+            try {
+                const snapshot = await database.ref('results').orderByChild('studentId').equalTo(studentId).once('value');
+                const results = snapshot.val();
+
+                if (!results) {
+                    listDiv.innerHTML = '<p style="color:var(--text-light);font-size:0.85rem;">No results yet.</p>';
+                    return;
+                }
+
+                let html = '';
+                Object.values(results).forEach(result => {
+                    const grade = getGrade(result.marks);
+                    html += `<div style="padding:8px;border-bottom:1px solid var(--border);font-size:0.85rem;">
+                        <strong>${result.subject}</strong> - ${result.term}: ${result.marks}/100 
+                        <span class="badge badge-${grade.toLowerCase()}" style="margin-left:8px;">${grade}</span>
+                        <button class="btn btn-xs btn-danger" style="float:right;" onclick="deleteResult('${result.id}')">Delete</button>
+                    </div>`;
+                });
+
+                listDiv.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading existing results:', error);
+                listDiv.innerHTML = '<p style="color:#ea4335;font-size:0.85rem;">Error loading results.</p>';
+            }
+        }
+
+        // Handle save result
+        async function handleSaveResult(event) {
+            event.preventDefault();
+
+            const studentId = document.getElementById('resultStudentId').value;
+            const className = document.getElementById('resultClassName').value;
+            const subject = document.getElementById('resultSubject').value;
+            const term = document.getElementById('resultTerm').value;
+            const marks = parseInt(document.getElementById('resultMarks').value);
+
+            if (!subject || !term || isNaN(marks)) {
+                showToast('Please fill in all fields', 'error');
+                return;
+            }
+
+            showLoading();
+            try {
+                // Check if result already exists
+                const existingSnapshot = await database.ref('results')
+                    .orderByChild('studentId_subject_term')
+                    .equalTo(`${studentId}_${subject}_${term}`)
+                    .once('value');
+
+                const existingResults = existingSnapshot.val();
+                let resultId;
+
+                if (existingResults) {
+                    // Update existing
+                    resultId = Object.keys(existingResults)[0];
+                    await database.ref('results/' + resultId).update({
+                        marks: marks,
+                        updatedAt: new Date().toISOString()
+                    });
+                    showToast('Result updated successfully!', 'success');
+                } else {
+                    // Create new
+                    resultId = Date.now().toString();
+                    await database.ref('results/' + resultId).set({
+                        id: resultId,
+                        studentId: studentId,
+                        className: className,
+                        subject: subject,
+                        term: term,
+                        marks: marks,
+                        studentId_subject_term: `${studentId}_${subject}_${term}`,
+                        createdAt: new Date().toISOString()
+                    });
+                    showToast('Result added successfully!', 'success');
+                }
+
+                // Refresh existing results
+                loadExistingResults(studentId);
+                document.getElementById('resultForm').reset();
+
+            } catch (error) {
+                console.error('Error saving result:', error);
+                showToast('Failed to save result. Please try again.', 'error');
+            }
+            hideLoading();
+        }
+
+        // Delete result
+        async function deleteResult(resultId) {
+            if (!confirm('Are you sure you want to delete this result?')) return;
+
+            showLoading();
+            try {
+                await database.ref('results/' + resultId).remove();
+                const studentId = document.getElementById('resultStudentId').value;
+                loadExistingResults(studentId);
+                showToast('Result deleted successfully!', 'success');
+            } catch (error) {
+                console.error('Error deleting result:', error);
+                showToast('Failed to delete result.', 'error');
+            }
+            hideLoading();
+        }
+
+        // ==================== REGISTRATION FUNCTIONS ====================
+
+        // Handle student registration
+        async function handleRegisterStudent(event) {
+            event.preventDefault();
+
+            const name = document.getElementById('regStudentName').value.trim();
+            const studentId = document.getElementById('regStudentId').value.trim();
+            const className = document.getElementById('regStudentClass').value;
+            const password = document.getElementById('regStudentPassword').value;
+
+            if (!name || !studentId || !className || !password) {
+                showToast('Please fill in all fields', 'error');
+                return;
+            }
+
+            showLoading();
+            try {
+                // Check if student already exists
+                const existingSnapshot = await database.ref('students/' + studentId).once('value');
+                const exists = existingSnapshot.exists();
+
+                await database.ref('students/' + studentId).set({
+                    name: name,
+                    class: className,
+                    password: password,
+                    createdAt: new Date().toISOString()
+                });
+
+                const message = exists ? 'Student updated successfully!' : 'Student registered successfully!';
+                showToast(message, 'success');
+
+                document.getElementById('registerStudentForm').reset();
+                navigateTo('main');
+
+            } catch (error) {
+                console.error('Registration error:', error);
+                showToast('Registration failed. Please try again.', 'error');
+            }
+            hideLoading();
+        }
+
+        // Handle teacher registration
+        async function handleRegisterTeacher(event) {
+            event.preventDefault();
+
+            const name = document.getElementById('regTeacherName').value.trim();
+            const staffId = document.getElementById('regTeacherStaff').value.trim();
+            const password = document.getElementById('regTeacherPassword').value;
+
+            if (!name || !staffId || !password) {
+                showToast('Please fill in all fields', 'error');
+                return;
+            }
+
+            showLoading();
+            try {
+                // Check if teacher already exists
+                const existingSnapshot = await database.ref('teachers/' + staffId).once('value');
+                const exists = existingSnapshot.exists();
+
+                await database.ref('teachers/' + staffId).set({
+                    name: name,
+                    password: password,
+                    createdAt: new Date().toISOString()
+                });
+
+                const message = exists ? 'Teacher updated successfully!' : 'Teacher registered successfully!';
+                showToast(message, 'success');
+
+                document.getElementById('registerTeacherForm').reset();
+                navigateTo('main');
+
+            } catch (error) {
+                console.error('Registration error:', error);
+                showToast('Registration failed. Please try again.', 'error');
+            }
+            hideLoading();
+        }
+
+        // ==================== CLASS MANAGEMENT ====================
+
+        // Show add class modal
+        function showAddClassModal() {
+            document.getElementById('addClassModalOverlay').classList.add('active');
+        }
+
+        // Close add class modal
+        function closeAddClassModal() {
+            document.getElementById('addClassModalOverlay').classList.remove('active');
+            document.getElementById('addClassForm').reset();
+        }
+
+        // Handle add class
+        async function handleAddClass(event) {
+            event.preventDefault();
+
+            const className = document.getElementById('newClassName').value.trim();
+
+            if (!className) {
+                showToast('Please enter a class name', 'error');
+                return;
+            }
+
+            showLoading();
+            try {
+                // Check if class already exists
+                const existingSnapshot = await database.ref('classes/' + className).once('value');
+                if (existingSnapshot.exists()) {
+                    showToast('Class already exists', 'error');
+                    hideLoading();
+                    return;
+                }
+
+                await database.ref('classes/' + className).set({
+                    name: className,
+                    createdAt: new Date().toISOString()
+                });
+
+                showToast('Class created successfully!', 'success');
+                closeAddClassModal();
+                loadTeacherClasses();
+
+            } catch (error) {
+                console.error('Error creating class:', error);
+                showToast('Failed to create class. Please try again.', 'error');
+            }
+            hideLoading();
+        }
+
+        // ==================== UTILITY FUNCTIONS ====================
+
+        // Get grade from marks
+        function getGrade(marks) {
+            if (marks >= 90) return 'A';
+            if (marks >= 80) return 'B';
+            if (marks >= 70) return 'C';
+            if (marks >= 60) return 'D';
+            return 'F';
+        }
+
+        // Load classes for student registration
+        async function loadClassesForRegistration() {
+            const select = document.getElementById('regStudentClass');
+
+            try {
+                const snapshot = await database.ref('classes').once('value');
+                const classes = snapshot.val();
+
+                if (classes) {
+                    Object.keys(classes).forEach(className => {
+                        const option = document.createElement('option');
+                        option.value = className;
+                        option.textContent = className;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading classes:', error);
+            }
+        }
+
+        // ==================== INITIALIZATION ====================
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load classes for registration
+            loadClassesForRegistration();
+
+            // Check for existing session
+            const userType = sessionStorage.getItem('userType');
+            const userId = sessionStorage.getItem('userId');
+
+            if (userType && userId) {
+                if (userType === 'student') {
+                    document.getElementById('studentNameDisplay').textContent = sessionStorage.getItem('userName');
+                    document.getElementById('studentIdDisplay').textContent = `ID: ${userId}`;
+                    loadStudentResults(userId);
+                    navigateTo('student-results');
+                } else if (userType === 'teacher') {
+                    document.getElementById('teacherNameDisplay').textContent = sessionStorage.getItem('userName');
+                    loadTeacherClasses();
+                    navigateTo('teacher-dashboard');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
