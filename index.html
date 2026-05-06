@@ -236,12 +236,15 @@
         </div>
     </div>
 
-    <!-- ==================== MODAL: Add Class ==================== -->
+    <!-- ==================== MODAL: Add/Edit Class ==================== -->
     <div class="modal-overlay" id="addClassModalOverlay">
         <div class="modal" id="addClassModal">
             <button class="modal-close" onclick="closeAddClassModal()">✕</button>
-            <h3>Add New Class</h3>
-            <form id="addClassForm" onsubmit="handleAddClass(event)">
+            <h3 id="addClassModalTitle">Add New Class</h3>
+            <form id="addClassForm" onsubmit="handleSaveClass(event)">
+                <!-- Hidden fields for edit mode -->
+                <input type="hidden" id="classEditMode" value="false">
+                <input type="hidden" id="originalClassName" value="">
                 <div class="form-group">
                     <label for="newClassName">Class Name</label>
                     <input type="text" id="newClassName" placeholder="e.g. U6 Geografi" required>
@@ -250,7 +253,7 @@
                     <label for="homeroomTeacherInput">Homeroom Teacher</label>
                     <input type="text" id="homeroomTeacherInput" placeholder="e.g. Cikgu Ahmad" required>
                 </div>
-                <button type="submit" class="btn btn-accent">➕ Create Class</button>
+                <button type="submit" class="btn btn-accent" id="saveClassBtn">➕ Create Class</button>
             </form>
         </div>
     </div>
@@ -356,7 +359,6 @@
                 document.getElementById('studentNameDisplay').textContent = studentData.name;
                 document.getElementById('studentIdDisplay').textContent = `ID: ${studentId} | Class: ${studentData.class}`;
 
-                // Load MUET band
                 const muetBand = studentData.muetBand || null;
                 document.getElementById('muetDisplay').innerHTML = muetBand
                     ? `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${muetBand}</div>`
@@ -425,7 +427,6 @@
             contentDiv.innerHTML = '<p class="text-center text-light">Loading results...</p>';
 
             try {
-                // Fetch own results
                 const ownSnap = await db.collection('results')
                     .where('studentId', '==', studentId)
                     .get();
@@ -436,7 +437,6 @@
                     return;
                 }
 
-                // Group results by term
                 const grouped = {};
                 ownSnap.forEach(doc => {
                     const r = doc.data();
@@ -476,7 +476,6 @@
                     </div>`;
                 }
 
-                // Overall average NGP
                 let ownAvgNgp = 0;
                 if (overallCount > 0) {
                     ownAvgNgp = overallNgpTotal / overallCount;
@@ -485,14 +484,13 @@
                     </div>`;
                 }
 
-                // Compute class ranking and status
                 if (className) {
                     try {
                         const classResultsSnap = await db.collection('results')
                             .where('className', '==', className)
                             .get();
 
-                        const studentNgpMap = {}; // studentId -> { totalNgp, count }
+                        const studentNgpMap = {};
                         classResultsSnap.forEach(doc => {
                             const r = doc.data();
                             if (!studentNgpMap[r.studentId]) studentNgpMap[r.studentId] = { totalNgp: 0, count: 0 };
@@ -500,14 +498,12 @@
                             studentNgpMap[r.studentId].count += 1;
                         });
 
-                        // Calculate average NGP per student
                         const averages = Object.entries(studentNgpMap).map(([id, data]) => ({
                             studentId: id,
                             avgNgp: data.totalNgp / data.count
                         }));
-                        averages.sort((a, b) => b.avgNgp - a.avgNgp); // descending
+                        averages.sort((a, b) => b.avgNgp - a.avgNgp);
 
-                        // Dense ranking
                         let position = 'N/A';
                         if (averages.length > 0) {
                             let rank = 1;
@@ -524,7 +520,6 @@
                             }
                         }
 
-                        // Academic status based on ownAvgNgp
                         let status = '';
                         if (ownAvgNgp >= 3.67) status = 'Excellent';
                         else if (ownAvgNgp >= 3.00) status = 'Good';
@@ -548,7 +543,6 @@
 
                 contentDiv.innerHTML = html;
 
-                // Refresh MUET display (in case it changed)
                 const stuDoc = await db.collection('students').doc(studentId).get();
                 const muetBand = stuDoc.exists ? stuDoc.data().muetBand || null : null;
                 document.getElementById('muetDisplay').innerHTML = muetBand
@@ -577,10 +571,17 @@
                     const className = doc.id;
                     const data = doc.data();
                     const homeroom = data.homeroomTeacher || 'N/A';
-                    html += `<button class="btn btn-outline class-btn" onclick="selectClass('${className}')">
-                        <span class="class-name">${className}</span>
-                        <small class="homeroom">${homeroom}</small>
-                    </button>`;
+                    html += `
+                    <div class="class-item">
+                        <button class="btn btn-outline class-btn" onclick="selectClass('${className}')">
+                            <span class="class-name">${className}</span>
+                            <small class="homeroom">${homeroom}</small>
+                        </button>
+                        <div class="class-actions">
+                            <button class="btn btn-xs btn-primary" onclick="event.stopPropagation(); showEditClassModal('${className}', '${homeroom}')">✏️ Edit</button>
+                            <button class="btn btn-xs btn-danger" onclick="event.stopPropagation(); deleteClass('${className}')">🗑️ Delete</button>
+                        </div>
+                    </div>`;
                 });
                 html += '</div>';
                 contentDiv.innerHTML = html;
@@ -846,16 +847,39 @@
         // ==================== CLASS MANAGEMENT ====================
 
         function showAddClassModal() {
+            // Reset to add mode
+            document.getElementById('classEditMode').value = 'false';
+            document.getElementById('originalClassName').value = '';
+            document.getElementById('newClassName').value = '';
+            document.getElementById('homeroomTeacherInput').value = '';
+            document.getElementById('addClassModalTitle').textContent = 'Add New Class';
+            document.getElementById('saveClassBtn').textContent = '➕ Create Class';
+            document.getElementById('newClassName').readOnly = false;
+            document.getElementById('addClassModalOverlay').classList.add('active');
+        }
+
+        function showEditClassModal(className, homeroom) {
+            document.getElementById('classEditMode').value = 'true';
+            document.getElementById('originalClassName').value = className;
+            document.getElementById('newClassName').value = className;
+            document.getElementById('homeroomTeacherInput').value = homeroom;
+            document.getElementById('addClassModalTitle').textContent = 'Edit Class';
+            document.getElementById('saveClassBtn').textContent = '💾 Update Class';
+            // Make class name read-only during edit
+            document.getElementById('newClassName').readOnly = true;
             document.getElementById('addClassModalOverlay').classList.add('active');
         }
 
         function closeAddClassModal() {
             document.getElementById('addClassModalOverlay').classList.remove('active');
             document.getElementById('addClassForm').reset();
+            document.getElementById('newClassName').readOnly = false;
         }
 
-        async function handleAddClass(event) {
+        async function handleSaveClass(event) {
             event.preventDefault();
+            const editMode = document.getElementById('classEditMode').value === 'true';
+            const originalClassName = document.getElementById('originalClassName').value.trim();
             const className = document.getElementById('newClassName').value.trim();
             const homeroomTeacher = document.getElementById('homeroomTeacherInput').value.trim();
 
@@ -866,23 +890,48 @@
 
             showLoading();
             try {
-                const existingDoc = await db.collection('classes').doc(className).get();
-                if (existingDoc.exists) {
-                    showToast('Class already exists', 'error');
-                    hideLoading();
-                    return;
+                if (editMode) {
+                    // Update existing class (only homeroom teacher; class name can't change because it's the doc ID)
+                    await db.collection('classes').doc(originalClassName).update({
+                        homeroomTeacher: homeroomTeacher,
+                        // optionally update name field if needed (stored inside doc)
+                        name: originalClassName
+                    });
+                    showToast('Class updated successfully!', 'success');
+                } else {
+                    // Add new class
+                    const existingDoc = await db.collection('classes').doc(className).get();
+                    if (existingDoc.exists) {
+                        showToast('Class already exists', 'error');
+                        hideLoading();
+                        return;
+                    }
+                    await db.collection('classes').doc(className).set({
+                        name: className,
+                        homeroomTeacher: homeroomTeacher,
+                        createdAt: new Date().toISOString()
+                    });
+                    showToast('Class created successfully!', 'success');
                 }
-                await db.collection('classes').doc(className).set({
-                    name: className,
-                    homeroomTeacher: homeroomTeacher,
-                    createdAt: new Date().toISOString()
-                });
-                showToast('Class created successfully!', 'success');
                 closeAddClassModal();
                 loadTeacherClasses();
             } catch (error) {
-                console.error('Error creating class:', error);
-                showToast('Failed to create class.', 'error');
+                console.error('Error saving class:', error);
+                showToast('Failed to save class.', 'error');
+            }
+            hideLoading();
+        }
+
+        async function deleteClass(className) {
+            if (!confirm(`Are you sure you want to delete the class "${className}"? This action cannot be undone.`)) return;
+            showLoading();
+            try {
+                await db.collection('classes').doc(className).delete();
+                showToast('Class deleted successfully!', 'success');
+                loadTeacherClasses();
+            } catch (error) {
+                console.error('Error deleting class:', error);
+                showToast('Failed to delete class.', 'error');
             }
             hideLoading();
         }
@@ -946,7 +995,6 @@
                     document.getElementById('studentNameDisplay').textContent = sessionStorage.getItem('userName');
                     document.getElementById('studentIdDisplay').textContent = `ID: ${userId}`;
                     const userClass = sessionStorage.getItem('userClass');
-                    // Load MUET if available
                     db.collection('students').doc(userId).get().then(doc => {
                         if (doc.exists && doc.data().muetBand) {
                             document.getElementById('muetDisplay').innerHTML = `<div class="badge badge-b">MUET: ${doc.data().muetBand}</div>`;
@@ -961,7 +1009,6 @@
                 }
             }
 
-            // Close modals on overlay click
             document.getElementById('resultModalOverlay').addEventListener('click', function(e) {
                 if (e.target === this) closeResultModal();
             });
