@@ -731,11 +731,31 @@
         // ==================== UTILITIES ====================
 
         function getGrade(marks) {
-            if (marks >= 90) return 'A';
-            if (marks >= 80) return 'B';
-            if (marks >= 70) return 'C';
-            if (marks >= 60) return 'D';
+            if (marks >= 80) return 'A';
+            if (marks >= 70) return 'A-';
+            if (marks >= 65) return 'B+';
+            if (marks >= 60) return 'B';
+            if (marks >= 55) return 'B-';
+            if (marks >= 50) return 'C+';
+            if (marks >= 45) return 'C';
+            if (marks >= 40) return 'C-';
+            if (marks >= 35) return 'D+';
+            if (marks >= 30) return 'D';
             return 'F';
+        }
+
+        function getNGP(marks) {
+            if (marks >= 80) return 4.0;
+            if (marks >= 70) return 3.67;
+            if (marks >= 65) return 3.33;
+            if (marks >= 60) return 3.00;
+            if (marks >= 55) return 2.67;
+            if (marks >= 50) return 2.33;
+            if (marks >= 45) return 2.00;
+            if (marks >= 40) return 1.67;
+            if (marks >= 35) return 1.33;
+            if (marks >= 30) return 1.00;
+            return 0.0;
         }
 
         async function loadClassesForRegistration() {
