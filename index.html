@@ -615,21 +615,26 @@
                     return;
                 }
 
+                // Collect and sort students alphabetically by name
+                const studentsArray = [];
+                snapshot.forEach(doc => {
+                    studentsArray.push({ id: doc.id, ...doc.data() });
+                });
+                studentsArray.sort((a, b) => a.name.localeCompare(b.name));
+
                 let html = `
                 <div class="table-wrapper">
                     <table>
                         <thead><tr><th>Student ID</th><th>Name</th><th>Actions</th></tr></thead>
                         <tbody>`;
-                snapshot.forEach(doc => {
-                    const student = doc.data();
-                    const id = doc.id;
+                studentsArray.forEach(student => {
                     html += `<tr>
-                        <td>${id}</td>
+                        <td>${student.id}</td>
                         <td>${student.name}</td>
                         <td>
-                            <button class="btn btn-xs btn-primary" onclick="showResultModal('${id}', '${student.name}', '${className}')">📝 Results</button>
-                            <button class="btn btn-xs btn-accent" onclick="showMuetModal('${id}', '${className}')">🎤 MUET</button>
-                            <button class="btn btn-xs btn-danger" onclick="deleteStudent('${id}', '${className}')">🗑️ Delete</button>
+                            <button class="btn btn-xs btn-primary" onclick="showResultModal('${student.id}', '${student.name}', '${className}')">📝 Results</button>
+                            <button class="btn btn-xs btn-accent" onclick="showMuetModal('${student.id}', '${className}')">🎤 MUET</button>
+                            <button class="btn btn-xs btn-danger" onclick="deleteStudent('${student.id}', '${className}')">🗑️ Delete</button>
                         </td>
                     </tr>`;
                 });
