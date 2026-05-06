@@ -253,59 +253,50 @@
         </div>
     </div>
 
-    <!-- ==================== SCRIPTS (unchanged) ==================== -->
+    <!-- ==================== SCRIPTS ==================== -->
     <script>
-        // Firebase configuration
+        // ---- Firebase configuration ----
         const firebaseConfig = {
-        apiKey: "AIzaSyCBjA_xaSAJdweodUsEMzvGY5R69I3esgE",
-        authDomain: "resultexam-25f4e.firebaseapp.com",
-        databaseURL: "https://resultexam-25f4e-default-rtdb.firebaseio.com",
-        projectId: "resultexam-25f4e",
-        storageBucket: "resultexam-25f4e.firebasestorage.app",
-        messagingSenderId: "1090858219421",
-        appId: "1:1090858219421:web:da3e3ddd4ab18027f06174",
-        measurementId: "G-RJ02VST99R"
+            apiKey: "AIzaSyCBjA_xaSAJdweodUsEMzvGY5R69I3esgE",
+            authDomain: "resultexam-25f4e.firebaseapp.com",
+            databaseURL: "https://resultexam-25f4e-default-rtdb.firebaseio.com", // kept for reference, not used
+            projectId: "resultexam-25f4e",
+            storageBucket: "resultexam-25f4e.firebasestorage.app",
+            messagingSenderId: "1090858219421",
+            appId: "1:1090858219421:web:da3e3ddd4ab18027f06174",
+            measurementId: "G-RJ02VST99R"
         };
 
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
+        const db = firebase.firestore();
 
         // ==================== UTILITY FUNCTIONS ====================
 
-        // Show loading overlay
         function showLoading() {
             document.getElementById('loadingOverlay').classList.add('active');
         }
 
-        // Hide loading overlay
         function hideLoading() {
             document.getElementById('loadingOverlay').classList.remove('active');
         }
 
-        // Show toast notification
         function showToast(message, type = 'info') {
             const toastContainer = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
             toast.innerHTML = `${message}`;
             toastContainer.appendChild(toast);
-            setTimeout(() => {
-                toast.remove();
-            }, 4000);
+            setTimeout(() => toast.remove(), 4000);
         }
 
-        // Navigate between pages
         function navigateTo(pageId) {
-            // Hide all pages
             document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
-            // Show target page
             document.getElementById(`page-${pageId}`).classList.add('active');
         }
 
-        // ==================== AUTHENTICATION FUNCTIONS ====================
+        // ==================== AUTHENTICATION ====================
 
-        // Handle student login
         async function handleStudentLogin(event) {
             event.preventDefault();
             const studentId = document.getElementById('studentIdInput').value.trim();
@@ -318,28 +309,28 @@
 
             showLoading();
             try {
-                const snapshot = await database.ref('students/' + studentId).once('value');
-                const studentData = snapshot.val();
-
-                if (studentData && studentData.password === password) {
-                    // Store session
-                    sessionStorage.setItem('userType', 'student');
-                    sessionStorage.setItem('userId', studentId);
-                    sessionStorage.setItem('userName', studentData.name);
-
-                    // Update UI
-                    document.getElementById('studentNameDisplay').textContent = studentData.name;
-                    document.getElementById('studentIdDisplay').textContent = `ID: ${studentId}`;
-
-                    // Load results
-                    loadStudentResults(studentId);
-
-                    // Navigate
-                    navigateTo('student-results');
-                    showToast('Login successful!', 'success');
-                } else {
+                const doc = await db.collection('students').doc(studentId).get();
+                if (!doc.exists) {
                     showToast('Invalid credentials', 'error');
+                    hideLoading();
+                    return;
                 }
+                const studentData = doc.data();
+                if (studentData.password !== password) {
+                    showToast('Invalid credentials', 'error');
+                    hideLoading();
+                    return;
+                }
+
+                sessionStorage.setItem('userType', 'student');
+                sessionStorage.setItem('userId', studentId);
+                sessionStorage.setItem('userName', studentData.name);
+
+                document.getElementById('studentNameDisplay').textContent = studentData.name;
+                document.getElementById('studentIdDisplay').textContent = `ID: ${studentId}`;
+                loadStudentResults(studentId);
+                navigateTo('student-results');
+                showToast('Login successful!', 'success');
             } catch (error) {
                 console.error('Login error:', error);
                 showToast('Login failed. Please try again.', 'error');
@@ -347,7 +338,6 @@
             hideLoading();
         }
 
-        // Handle teacher login
         async function handleTeacherLogin(event) {
             event.preventDefault();
             const staffId = document.getElementById('teacherStaffInput').value.trim();
@@ -360,27 +350,27 @@
 
             showLoading();
             try {
-                const snapshot = await database.ref('teachers/' + staffId).once('value');
-                const teacherData = snapshot.val();
-
-                if (teacherData && teacherData.password === password) {
-                    // Store session
-                    sessionStorage.setItem('userType', 'teacher');
-                    sessionStorage.setItem('userId', staffId);
-                    sessionStorage.setItem('userName', teacherData.name);
-
-                    // Update UI
-                    document.getElementById('teacherNameDisplay').textContent = teacherData.name;
-
-                    // Load classes
-                    loadTeacherClasses();
-
-                    // Navigate
-                    navigateTo('teacher-dashboard');
-                    showToast('Login successful!', 'success');
-                } else {
+                const doc = await db.collection('teachers').doc(staffId).get();
+                if (!doc.exists) {
                     showToast('Invalid credentials', 'error');
+                    hideLoading();
+                    return;
                 }
+                const teacherData = doc.data();
+                if (teacherData.password !== password) {
+                    showToast('Invalid credentials', 'error');
+                    hideLoading();
+                    return;
+                }
+
+                sessionStorage.setItem('userType', 'teacher');
+                sessionStorage.setItem('userId', staffId);
+                sessionStorage.setItem('userName', teacherData.name);
+
+                document.getElementById('teacherNameDisplay').textContent = teacherData.name;
+                loadTeacherClasses();
+                navigateTo('teacher-dashboard');
+                showToast('Login successful!', 'success');
             } catch (error) {
                 console.error('Login error:', error);
                 showToast('Login failed. Please try again.', 'error');
@@ -388,8 +378,7 @@
             hideLoading();
         }
 
-        // Handle logout
-        function handleLogout(userType) {
+        function handleLogout() {
             sessionStorage.clear();
             navigateTo('main');
             showToast('Logged out successfully', 'info');
@@ -397,93 +386,79 @@
 
         // ==================== STUDENT FUNCTIONS ====================
 
-        // Load student results
         async function loadStudentResults(studentId) {
             const contentDiv = document.getElementById('studentResultsContent');
             contentDiv.innerHTML = '<p style="text-align:center;color:var(--text-light);">Loading results...</p>';
 
             try {
-                const snapshot = await database.ref('results').orderByChild('studentId').equalTo(studentId).once('value');
-                const results = snapshot.val();
+                const snapshot = await db.collection('results')
+                    .where('studentId', '==', studentId)
+                    .get();
 
-                if (!results) {
+                if (snapshot.empty) {
                     contentDiv.innerHTML = '<p style="text-align:center;color:var(--text-light);">No results found.</p>';
                     return;
                 }
 
-                // Group results by term
-                const groupedResults = {};
-                Object.values(results).forEach(result => {
-                    if (!groupedResults[result.term]) {
-                        groupedResults[result.term] = [];
-                    }
-                    groupedResults[result.term].push(result);
+                const grouped = {};
+                snapshot.forEach(doc => {
+                    const result = doc.data();
+                    if (!grouped[result.term]) grouped[result.term] = [];
+                    grouped[result.term].push(result);
                 });
 
                 let html = '';
-                for (const [term, termResults] of Object.entries(groupedResults)) {
-                    html += `<div style="margin-bottom:24px;">
+                for (const [term, results] of Object.entries(grouped)) {
+                    html += `
+                    <div style="margin-bottom:24px;">
                         <h3 style="margin-bottom:12px;color:var(--primary);">${term}</h3>
                         <div class="table-wrapper">
                             <table>
-                                <thead>
-                                    <tr>
-                                        <th>Subject</th>
-                                        <th>Marks</th>
-                                        <th>Grade</th>
-                                    </tr>
-                                </thead>
+                                <thead><tr><th>Subject</th><th>Marks</th><th>Grade</th></tr></thead>
                                 <tbody>`;
-
-                    termResults.forEach(result => {
-                        const grade = getGrade(result.marks);
+                    results.forEach(r => {
+                        const grade = getGrade(r.marks);
                         html += `<tr>
-                            <td>${result.subject}</td>
-                            <td>${result.marks}/100</td>
+                            <td>${r.subject}</td>
+                            <td>${r.marks}/100</td>
                             <td><span class="badge badge-${grade.toLowerCase()}">${grade}</span></td>
                         </tr>`;
                     });
-
                     html += `</tbody></table></div></div>`;
                 }
-
                 contentDiv.innerHTML = html;
             } catch (error) {
                 console.error('Error loading results:', error);
-                contentDiv.innerHTML = '<p style="text-align:center;color:#ea4335;">Error loading results. Please try again.</p>';
+                contentDiv.innerHTML = '<p style="text-align:center;color:#ea4335;">Error loading results.</p>';
             }
         }
 
         // ==================== TEACHER FUNCTIONS ====================
 
-        // Load teacher classes
         async function loadTeacherClasses() {
             const contentDiv = document.getElementById('classListContent');
             contentDiv.innerHTML = '<p style="text-align:center;color:var(--text-light);">Loading classes...</p>';
 
             try {
-                const snapshot = await database.ref('classes').once('value');
-                const classes = snapshot.val();
-
-                if (!classes) {
+                const snapshot = await db.collection('classes').get();
+                if (snapshot.empty) {
                     contentDiv.innerHTML = '<p style="text-align:center;color:var(--text-light);">No classes found. Create your first class below.</p>';
                     return;
                 }
 
                 let html = '<div class="btn-group" style="flex-direction:column;gap:8px;">';
-                Object.keys(classes).forEach(className => {
+                snapshot.forEach(doc => {
+                    const className = doc.id; // document ID = class name
                     html += `<button class="btn btn-outline" onclick="selectClass('${className}')">${className}</button>`;
                 });
                 html += '</div>';
-
                 contentDiv.innerHTML = html;
             } catch (error) {
                 console.error('Error loading classes:', error);
-                contentDiv.innerHTML = '<p style="text-align:center;color:#ea4335;">Error loading classes. Please try again.</p>';
+                contentDiv.innerHTML = '<p style="text-align:center;color:#ea4335;">Error loading classes.</p>';
             }
         }
 
-        // Select a class
         function selectClass(className) {
             sessionStorage.setItem('currentClass', className);
             document.getElementById('currentClassName').textContent = className;
@@ -492,22 +467,28 @@
             navigateTo('teacher-class');
         }
 
-        // Load students in a class
         async function loadClassStudents(className) {
             const contentDiv = document.getElementById('classStudentsContent');
             contentDiv.innerHTML = '<p style="text-align:center;color:var(--text-light);">Loading students...</p>';
 
             try {
-                const snapshot = await database.ref('students').orderByChild('class').equalTo(className).once('value');
-                const students = snapshot.val();
+                const snapshot = await db.collection('students')
+                    .where('class', '==', className)
+                    .get();
 
-                if (!students) {
+                if (snapshot.empty) {
                     contentDiv.innerHTML = '<p style="text-align:center;color:var(--text-light);">No students in this class.</p>';
                     return;
                 }
 
-                let html = '<div class="table-wrapper"><table><thead><tr><th>Student ID</th><th>Name</th><th>Actions</th></tr></thead><tbody>';
-                Object.entries(students).forEach(([id, student]) => {
+                let html = `
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Student ID</th><th>Name</th><th>Actions</th></tr></thead>
+                        <tbody>`;
+                snapshot.forEach(doc => {
+                    const student = doc.data();
+                    const id = doc.id;
                     html += `<tr>
                         <td>${id}</td>
                         <td>${student.name}</td>
@@ -517,57 +498,53 @@
                     </tr>`;
                 });
                 html += '</tbody></table></div>';
-
                 contentDiv.innerHTML = html;
             } catch (error) {
                 console.error('Error loading students:', error);
-                contentDiv.innerHTML = '<p style="text-align:center;color:#ea4335;">Error loading students. Please try again.</p>';
+                contentDiv.innerHTML = '<p style="text-align:center;color:#ea4335;">Error loading students.</p>';
             }
         }
 
         // ==================== RESULT MANAGEMENT ====================
 
-        // Show result modal
-        async function showResultModal(studentId, studentName, className) {
+        function showResultModal(studentId, studentName, className) {
             document.getElementById('resultStudentId').value = studentId;
             document.getElementById('resultClassName').value = className;
             document.getElementById('resultModalTitle').textContent = `Add / Edit Result for ${studentName}`;
-
-            // Load existing results
             loadExistingResults(studentId);
-
             document.getElementById('resultModalOverlay').classList.add('active');
         }
 
-        // Close result modal
         function closeResultModal() {
             document.getElementById('resultModalOverlay').classList.remove('active');
             document.getElementById('resultForm').reset();
         }
 
-        // Load existing results for a student
         async function loadExistingResults(studentId) {
             const listDiv = document.getElementById('existingResultsList');
+            listDiv.innerHTML = '<p style="color:var(--text-light);font-size:0.85rem;">Loading...</p>';
 
             try {
-                const snapshot = await database.ref('results').orderByChild('studentId').equalTo(studentId).once('value');
-                const results = snapshot.val();
+                const snapshot = await db.collection('results')
+                    .where('studentId', '==', studentId)
+                    .get();
 
-                if (!results) {
+                if (snapshot.empty) {
                     listDiv.innerHTML = '<p style="color:var(--text-light);font-size:0.85rem;">No results yet.</p>';
                     return;
                 }
 
                 let html = '';
-                Object.values(results).forEach(result => {
+                snapshot.forEach(doc => {
+                    const result = doc.data();
                     const grade = getGrade(result.marks);
-                    html += `<div style="padding:8px;border-bottom:1px solid var(--border);font-size:0.85rem;">
+                    html += `
+                    <div style="padding:8px;border-bottom:1px solid var(--border);font-size:0.85rem;">
                         <strong>${result.subject}</strong> - ${result.term}: ${result.marks}/100 
                         <span class="badge badge-${grade.toLowerCase()}" style="margin-left:8px;">${grade}</span>
-                        <button class="btn btn-xs btn-danger" style="float:right;" onclick="deleteResult('${result.id}')">Delete</button>
+                        <button class="btn btn-xs btn-danger" style="float:right;" onclick="deleteResult('${doc.id}')">Delete</button>
                     </div>`;
                 });
-
                 listDiv.innerHTML = html;
             } catch (error) {
                 console.error('Error loading existing results:', error);
@@ -575,7 +552,6 @@
             }
         }
 
-        // Handle save result
         async function handleSaveResult(event) {
             event.preventDefault();
 
@@ -592,57 +568,50 @@
 
             showLoading();
             try {
-                // Check if result already exists
-                const existingSnapshot = await database.ref('results')
-                    .orderByChild('studentId_subject_term')
-                    .equalTo(`${studentId}_${subject}_${term}`)
-                    .once('value');
+                // Check for existing result using composite query
+                const existingSnapshot = await db.collection('results')
+                    .where('studentId', '==', studentId)
+                    .where('subject', '==', subject)
+                    .where('term', '==', term)
+                    .limit(1)
+                    .get();
 
-                const existingResults = existingSnapshot.val();
-                let resultId;
-
-                if (existingResults) {
+                if (!existingSnapshot.empty) {
                     // Update existing
-                    resultId = Object.keys(existingResults)[0];
-                    await database.ref('results/' + resultId).update({
+                    const docId = existingSnapshot.docs[0].id;
+                    await db.collection('results').doc(docId).update({
                         marks: marks,
                         updatedAt: new Date().toISOString()
                     });
                     showToast('Result updated successfully!', 'success');
                 } else {
                     // Create new
-                    resultId = Date.now().toString();
-                    await database.ref('results/' + resultId).set({
-                        id: resultId,
+                    await db.collection('results').add({
                         studentId: studentId,
                         className: className,
                         subject: subject,
                         term: term,
                         marks: marks,
-                        studentId_subject_term: `${studentId}_${subject}_${term}`,
                         createdAt: new Date().toISOString()
                     });
                     showToast('Result added successfully!', 'success');
                 }
 
-                // Refresh existing results
-                loadExistingResults(studentId);
                 document.getElementById('resultForm').reset();
-
+                loadExistingResults(studentId);
             } catch (error) {
                 console.error('Error saving result:', error);
-                showToast('Failed to save result. Please try again.', 'error');
+                showToast('Failed to save result. If this persists, create a Firestore composite index for: studentId, subject, term.', 'error');
             }
             hideLoading();
         }
 
-        // Delete result
         async function deleteResult(resultId) {
             if (!confirm('Are you sure you want to delete this result?')) return;
 
             showLoading();
             try {
-                await database.ref('results/' + resultId).remove();
+                await db.collection('results').doc(resultId).delete();
                 const studentId = document.getElementById('resultStudentId').value;
                 loadExistingResults(studentId);
                 showToast('Result deleted successfully!', 'success');
@@ -653,9 +622,8 @@
             hideLoading();
         }
 
-        // ==================== REGISTRATION FUNCTIONS ====================
+        // ==================== REGISTRATION ====================
 
-        // Handle student registration
         async function handleRegisterStudent(event) {
             event.preventDefault();
 
@@ -671,31 +639,23 @@
 
             showLoading();
             try {
-                // Check if student already exists
-                const existingSnapshot = await database.ref('students/' + studentId).once('value');
-                const exists = existingSnapshot.exists();
-
-                await database.ref('students/' + studentId).set({
+                const existingDoc = await db.collection('students').doc(studentId).get();
+                await db.collection('students').doc(studentId).set({
                     name: name,
                     class: className,
                     password: password,
-                    createdAt: new Date().toISOString()
+                    createdAt: existingDoc.exists ? existingDoc.data().createdAt : new Date().toISOString()
                 });
-
-                const message = exists ? 'Student updated successfully!' : 'Student registered successfully!';
-                showToast(message, 'success');
-
+                showToast(existingDoc.exists ? 'Student updated successfully!' : 'Student registered successfully!', 'success');
                 document.getElementById('registerStudentForm').reset();
                 navigateTo('main');
-
             } catch (error) {
                 console.error('Registration error:', error);
-                showToast('Registration failed. Please try again.', 'error');
+                showToast('Registration failed.', 'error');
             }
             hideLoading();
         }
 
-        // Handle teacher registration
         async function handleRegisterTeacher(event) {
             event.preventDefault();
 
@@ -710,48 +670,36 @@
 
             showLoading();
             try {
-                // Check if teacher already exists
-                const existingSnapshot = await database.ref('teachers/' + staffId).once('value');
-                const exists = existingSnapshot.exists();
-
-                await database.ref('teachers/' + staffId).set({
+                const existingDoc = await db.collection('teachers').doc(staffId).get();
+                await db.collection('teachers').doc(staffId).set({
                     name: name,
                     password: password,
-                    createdAt: new Date().toISOString()
+                    createdAt: existingDoc.exists ? existingDoc.data().createdAt : new Date().toISOString()
                 });
-
-                const message = exists ? 'Teacher updated successfully!' : 'Teacher registered successfully!';
-                showToast(message, 'success');
-
+                showToast(existingDoc.exists ? 'Teacher updated successfully!' : 'Teacher registered successfully!', 'success');
                 document.getElementById('registerTeacherForm').reset();
                 navigateTo('main');
-
             } catch (error) {
                 console.error('Registration error:', error);
-                showToast('Registration failed. Please try again.', 'error');
+                showToast('Registration failed.', 'error');
             }
             hideLoading();
         }
 
         // ==================== CLASS MANAGEMENT ====================
 
-        // Show add class modal
         function showAddClassModal() {
             document.getElementById('addClassModalOverlay').classList.add('active');
         }
 
-        // Close add class modal
         function closeAddClassModal() {
             document.getElementById('addClassModalOverlay').classList.remove('active');
             document.getElementById('addClassForm').reset();
         }
 
-        // Handle add class
         async function handleAddClass(event) {
             event.preventDefault();
-
             const className = document.getElementById('newClassName').value.trim();
-
             if (!className) {
                 showToast('Please enter a class name', 'error');
                 return;
@@ -759,33 +707,29 @@
 
             showLoading();
             try {
-                // Check if class already exists
-                const existingSnapshot = await database.ref('classes/' + className).once('value');
-                if (existingSnapshot.exists()) {
+                const existingDoc = await db.collection('classes').doc(className).get();
+                if (existingDoc.exists) {
                     showToast('Class already exists', 'error');
                     hideLoading();
                     return;
                 }
 
-                await database.ref('classes/' + className).set({
+                await db.collection('classes').doc(className).set({
                     name: className,
                     createdAt: new Date().toISOString()
                 });
-
                 showToast('Class created successfully!', 'success');
                 closeAddClassModal();
                 loadTeacherClasses();
-
             } catch (error) {
                 console.error('Error creating class:', error);
-                showToast('Failed to create class. Please try again.', 'error');
+                showToast('Failed to create class.', 'error');
             }
             hideLoading();
         }
 
-        // ==================== UTILITY FUNCTIONS ====================
+        // ==================== UTILITIES ====================
 
-        // Get grade from marks
         function getGrade(marks) {
             if (marks >= 90) return 'A';
             if (marks >= 80) return 'B';
@@ -794,35 +738,27 @@
             return 'F';
         }
 
-        // Load classes for student registration
         async function loadClassesForRegistration() {
             const select = document.getElementById('regStudentClass');
-
             try {
-                const snapshot = await database.ref('classes').once('value');
-                const classes = snapshot.val();
-
-                if (classes) {
-                    Object.keys(classes).forEach(className => {
-                        const option = document.createElement('option');
-                        option.value = className;
-                        option.textContent = className;
-                        select.appendChild(option);
-                    });
-                }
+                const snapshot = await db.collection('classes').get();
+                select.innerHTML = '<option value="">-- Select Class --</option>';
+                snapshot.forEach(doc => {
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = doc.id;
+                    select.appendChild(option);
+                });
             } catch (error) {
-                console.error('Error loading classes:', error);
+                console.error('Error loading classes for registration:', error);
             }
         }
 
         // ==================== INITIALIZATION ====================
 
-        // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
-            // Load classes for registration
             loadClassesForRegistration();
 
-            // Check for existing session
             const userType = sessionStorage.getItem('userType');
             const userId = sessionStorage.getItem('userId');
 
