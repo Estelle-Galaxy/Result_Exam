@@ -242,7 +242,6 @@
             <button class="modal-close" onclick="closeAddClassModal()">✕</button>
             <h3 id="addClassModalTitle">Add New Class</h3>
             <form id="addClassForm" onsubmit="handleSaveClass(event)">
-                <!-- Hidden fields for edit mode -->
                 <input type="hidden" id="classEditMode" value="false">
                 <input type="hidden" id="originalClassName" value="">
                 <div class="form-group">
@@ -630,6 +629,7 @@
                         <td>
                             <button class="btn btn-xs btn-primary" onclick="showResultModal('${id}', '${student.name}', '${className}')">📝 Results</button>
                             <button class="btn btn-xs btn-accent" onclick="showMuetModal('${id}', '${className}')">🎤 MUET</button>
+                            <button class="btn btn-xs btn-danger" onclick="deleteStudent('${id}', '${className}')">🗑️ Delete</button>
                         </td>
                     </tr>`;
                 });
@@ -749,6 +749,32 @@
             hideLoading();
         }
 
+        // ==================== DELETE STUDENT ====================
+        async function deleteStudent(studentId, className) {
+            if (!confirm(`Are you sure you want to permanently delete student "${studentId}"? This will remove their account and all associated results.`)) return;
+            showLoading();
+            try {
+                // Delete the student document
+                await db.collection('students').doc(studentId).delete();
+
+                // Delete all results for this student
+                const resultsSnap = await db.collection('results')
+                    .where('studentId', '==', studentId)
+                    .get();
+                const batch = db.batch();
+                resultsSnap.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+
+                showToast('Student deleted successfully!', 'success');
+                // Refresh the class student list
+                loadClassStudents(className);
+            } catch (error) {
+                console.error('Error deleting student:', error);
+                showToast('Failed to delete student.', 'error');
+            }
+            hideLoading();
+        }
+
         // ==================== MUET MANAGEMENT ====================
 
         function showMuetModal(studentId, className) {
@@ -851,7 +877,6 @@
         // ==================== CLASS MANAGEMENT ====================
 
         function showAddClassModal() {
-            // Reset to add mode
             document.getElementById('classEditMode').value = 'false';
             document.getElementById('originalClassName').value = '';
             document.getElementById('newClassName').value = '';
@@ -869,7 +894,6 @@
             document.getElementById('homeroomTeacherInput').value = homeroom;
             document.getElementById('addClassModalTitle').textContent = 'Edit Class';
             document.getElementById('saveClassBtn').textContent = '💾 Update Class';
-            // Make class name read-only during edit
             document.getElementById('newClassName').readOnly = true;
             document.getElementById('addClassModalOverlay').classList.add('active');
         }
@@ -895,15 +919,12 @@
             showLoading();
             try {
                 if (editMode) {
-                    // Update existing class (only homeroom teacher; class name can't change because it's the doc ID)
                     await db.collection('classes').doc(originalClassName).update({
                         homeroomTeacher: homeroomTeacher,
-                        // optionally update name field if needed (stored inside doc)
                         name: originalClassName
                     });
                     showToast('Class updated successfully!', 'success');
                 } else {
-                    // Add new class
                     const existingDoc = await db.collection('classes').doc(className).get();
                     if (existingDoc.exists) {
                         showToast('Class already exists', 'error');
