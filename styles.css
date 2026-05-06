@@ -185,11 +185,6 @@ body {
     width: auto;
 }
 
-/* Utility: margin bottom */
-.mb-16 {
-    margin-bottom: 16px;
-}
-
 /* Button groups */
 .btn-group {
     display: flex;
@@ -311,6 +306,11 @@ body {
     margin-bottom: 12px;
 }
 
+.loading-text {
+    color: #5f6368;
+    font-weight: 600;
+}
+
 /* ==================== PAGE SECTIONS ==================== */
 .page {
     display: none;
@@ -360,11 +360,17 @@ table tbody tr:hover {
     font-size: 0.78rem;
 }
 
-.badge-a { background: #e6f4ea; color: #1b7a2d; }
-.badge-b { background: #e8f0fe; color: #1a5dc4; }
-.badge-c { background: #fef7e0; color: #b8860b; }
-.badge-d { background: #fce8e6; color: #c5221f; }
-.badge-f { background: #fce4ec; color: #b71c1c; }
+.badge-a  { background: #e6f4ea; color: #1b7a2d; }
+.badge-a- { background: #e8f0fe; color: #1a5dc4; }
+.badge-b+ { background: #e8f0fe; color: #1a5dc4; }
+.badge-b  { background: #e8f0fe; color: #1a5dc4; }
+.badge-b- { background: #e8f0fe; color: #1a5dc4; }
+.badge-c+ { background: #fef7e0; color: #b8860b; }
+.badge-c  { background: #fef7e0; color: #b8860b; }
+.badge-c- { background: #fef7e0; color: #b8860b; }
+.badge-d+ { background: #fce8e6; color: #c5221f; }
+.badge-d  { background: #fce8e6; color: #c5221f; }
+.badge-f  { background: #fce4ec; color: #b71c1c; }
 
 /* ==================== MODAL ==================== */
 .modal-overlay {
@@ -412,6 +418,37 @@ table tbody tr:hover {
 .modal-close:hover {
     color: var(--danger);
 }
+
+/* Modal section divider */
+.section-divider {
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+}
+
+.scrollable-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* ==================== UTILITY CLASSES ==================== */
+.mb-8  { margin-bottom: 8px; }
+.mb-12 { margin-bottom: 12px; }
+.mb-16 { margin-bottom: 16px; }
+.mt-16 { margin-top: 16px; }
+.mt-20 { margin-top: 20px; }
+.fw-700 { font-weight: 700; }
+
+.flex-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.text-center { text-align: center; }
+.text-light  { color: var(--text-light); }
+.small-text  { font-size: 0.85rem; }
 
 /* ==================== RESPONSIVE ==================== */
 @media (max-width: 600px) {
