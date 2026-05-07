@@ -24,10 +24,10 @@
     </div>
 
     <div class="video-background">
-            <video autoplay loop muted>
-                <source src="rolling-hills-under-a-blue-sky-moewalls-com.mp4" type="video/mp4">
-            </video>
-        </div>
+        <video autoplay loop muted>
+            <source src="rolling-hills-under-a-blue-sky-moewalls-com.mp4" type="video/mp4">
+        </video>
+    </div>
 
     <!-- ==================== TOAST CONTAINER ==================== -->
     <div id="toastContainer"></div>
@@ -40,7 +40,7 @@
             <div class="card">
                 <div class="app-logo">
                     <div class="icon-circle">
-                        <img src="logo badin.jpg" alt="Logo" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">
+                        <img id="appLogoImage" src="WhatsApp Image 2026-05-07 at 7.21.40 AM.jpeg" alt="Logo" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">
                     </div>
                 </div>
                 <h1 class="app-title">PTE SMK Badin</h1>
@@ -63,16 +63,20 @@
                 <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
                 <h2 class="app-title">Student Login</h2>
                 <p class="app-subtitle">Enter your Identification Number & Password</p>
-                <form id="studentLoginForm" onsubmit="handleStudentLogin(event)">
+                <form id="studentLoginForm" onsubmit="return false;">
                     <div class="form-group">
                         <label for="studentIdInput">Identification Number</label>
                         <input type="text" id="studentIdInput" placeholder="e.g. 011011120000" required autocomplete="off">
                     </div>
                     <div class="form-group">
                         <label for="studentPasswordInput">Password</label>
-                        <input type="password" id="studentPasswordInput" placeholder="Enter your password" required>
+                        <div class="password-wrapper">
+                            <input type="password" id="studentPasswordInput" placeholder="Enter your password" required>
+                            <button type="button" class="toggle-password" id="toggleStudentPassword">👁️</button>
+                        </div>
                     </div>
                     <button type="submit" class="btn btn-primary" id="studentLoginBtn">🔑 Login</button>
+                    <p class="forgot-link" onclick="openResetPasswordModal('student')">Forgot Password?</p>
                 </form>
             </div>
         </div>
@@ -81,15 +85,20 @@
         <div class="page" id="page-student-results">
             <div class="card wide">
                 <div class="flex-between mb-16">
-                    <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout('student')">← Logout</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout('student')">← Logout</button>
+                        <button class="btn btn-sm btn-outline btn-auto" onclick="printContent('studentResultsPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Keputusan Peperiksaan Keseluruhan')">🖨️ Print</button>
+                        <button class="btn btn-sm btn-outline btn-auto" onclick="openProfile()">👤 Profile</button>
+                    </div>
                     <span class="fw-700" id="studentNameDisplay"></span>
                 </div>
                 <h2 class="app-title">📊 My Examination Results</h2>
                 <p class="app-subtitle" id="studentIdDisplay"></p>
-                <!-- MUET result banner -->
-                <div id="muetDisplay" class="mb-16"></div>
-                <div id="studentResultsContent">
-                    <p class="text-center text-light">Loading results...</p>
+                <div id="studentResultsPrintArea">
+                    <div id="muetDisplay" class="mb-16"></div>
+                    <div id="studentResultsContent">
+                        <p class="text-center text-light">Loading results...</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -100,16 +109,20 @@
                 <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
                 <h2 class="app-title">Teacher Login</h2>
                 <p class="app-subtitle">Enter your Staff Number & Password</p>
-                <form id="teacherLoginForm" onsubmit="handleTeacherLogin(event)">
+                <form id="teacherLoginForm" onsubmit="return false;">
                     <div class="form-group">
                         <label for="teacherStaffInput">Staff Number</label>
                         <input type="text" id="teacherStaffInput" placeholder="e.g. T2024001" required autocomplete="off">
                     </div>
                     <div class="form-group">
                         <label for="teacherPasswordInput">Password</label>
-                        <input type="password" id="teacherPasswordInput" placeholder="Enter your password" required>
+                        <div class="password-wrapper">
+                            <input type="password" id="teacherPasswordInput" placeholder="Enter your password" required>
+                            <button type="button" class="toggle-password" id="toggleTeacherPassword">👁️</button>
+                        </div>
                     </div>
                     <button type="submit" class="btn btn-accent" id="teacherLoginBtn">🔑 Login</button>
+                    <p class="forgot-link" onclick="openResetPasswordModal('teacher')">Forgot Password?</p>
                 </form>
             </div>
         </div>
@@ -118,13 +131,21 @@
         <div class="page" id="page-teacher-dashboard">
             <div class="card wide">
                 <div class="flex-between mb-16">
-                    <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout('teacher')">← Logout</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout('teacher')">← Logout</button>
+                        <button class="btn btn-sm btn-outline btn-auto" onclick="openProfile()">👤 Profile</button>
+                    </div>
                     <span class="fw-700" id="teacherNameDisplay"></span>
                 </div>
                 <h2 class="app-title">📚 Select a Class</h2>
                 <p class="app-subtitle">Choose a class to manage student results</p>
                 <div id="classListContent">
                     <p class="text-center text-light">Loading classes...</p>
+                </div>
+                <div class="text-center mt-16">
+                    <button class="btn btn-outline btn-sm btn-auto" onclick="openGlobalAnalysisModal()">
+                        📊 Exam Analysis
+                    </button>
                 </div>
                 <div class="mt-16">
                     <button class="btn btn-outline btn-sm btn-auto" onclick="showAddClassModal()">+ Add New Class</button>
@@ -141,6 +162,11 @@
                 </div>
                 <h2 class="app-title">👨‍🎓 Students in <span id="classNameInline"></span></h2>
                 <p class="app-subtitle">Click "Add/Edit Results" to manage examination scores</p>
+                <div class="text-center mb-16">
+                    <button class="btn btn-sm btn-outline" onclick="printAnalysisWithInfo()" style="width: auto; margin: 0 auto;">
+                        📊 Class Analysis
+                    </button>
+                </div>
                 <div id="classStudentsContent">
                     <p class="text-center text-light">Loading students...</p>
                 </div>
@@ -153,7 +179,7 @@
                 <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
                 <h2 class="app-title">📝 Register Student</h2>
                 <p class="app-subtitle">Create a new student account or update existing</p>
-                <form id="registerStudentForm" onsubmit="handleRegisterStudent(event)">
+                <form id="registerStudentForm" onsubmit="return false;">
                     <div class="form-group">
                         <label for="regStudentName">Full Name</label>
                         <input type="text" id="regStudentName" placeholder="Enter student's full name" required>
@@ -183,7 +209,7 @@
                 <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
                 <h2 class="app-title">📋 Register Teacher</h2>
                 <p class="app-subtitle">Create a new teacher account or update existing</p>
-                <form id="registerTeacherForm" onsubmit="handleRegisterTeacher(event)">
+                <form id="registerTeacherForm" onsubmit="return false;">
                     <div class="form-group">
                         <label for="regTeacherName">Full Name</label>
                         <input type="text" id="regTeacherName" placeholder="Enter teacher's full name" required>
@@ -193,10 +219,102 @@
                         <input type="text" id="regTeacherStaff" placeholder="e.g. T2024001" required>
                     </div>
                     <div class="form-group">
+                        <label for="regTeacherRole">Role</label>
+                        <select id="regTeacherRole" required onchange="toggleHomeroomClass()">
+                            <option value="">-- Select Role --</option>
+                            <option value="Exam Secretary Admin">Exam Secretary Admin</option>
+                            <option value="Regular Teacher">Regular Teacher</option>
+                            <option value="Homeroom Teacher">Homeroom Teacher</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="homeroomClassGroup" style="display: none;">
+                        <label for="regTeacherHomeroomClass">Assigned Class</label>
+                        <select id="regTeacherHomeroomClass">
+                            <option value="">-- Select Class --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="regTeacherSubject">Subject</label>
+                        <select id="regTeacherSubject" required>
+                            <option value="">-- Select Subject --</option>
+                            <option value="Pengajian Am">Pengajian Am</option>
+                            <option value="Sejarah">Sejarah</option>
+                            <option value="Bahasa Melayu">Bahasa Melayu</option>
+                            <option value="Geografi">Geografi</option>
+                            <option value="KMK">KMK</option>
+                            <option value="Seni Visual">Seni Visual</option>
+                            <option value="ICT">ICT</option>
+                            <option value="Ekonomi">Ekonomi</option>
+                            <option value="None">None</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label for="regTeacherPassword">Password</label>
                         <input type="password" id="regTeacherPassword" placeholder="Create a password" required minlength="6">
                     </div>
                     <button type="submit" class="btn btn-accent" id="regTeacherBtn">💾 Register / Update Teacher</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ========== PAGE: Profile ========== -->
+        <div class="page" id="page-profile">
+            <div class="card">
+                <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="goBackFromProfile()">← Back</button>
+                <h2 class="app-title">👤 My Profile</h2>
+                <p class="app-subtitle">View and update your personal details</p>
+                <form id="profileForm" onsubmit="return false;">
+                    <input type="hidden" id="profileUserType" value="">
+                    <input type="hidden" id="profileUserId" value="">
+                    <div class="form-group">
+                        <label for="profileName">Full Name</label>
+                        <input type="text" id="profileName" placeholder="Your full name" required>
+                    </div>
+                    <div id="profileStudentFields" style="display: none;">
+                        <div class="form-group">
+                            <label for="profileClass">Class (cannot be changed)</label>
+                            <select id="profileClass" required>
+                                <option value="">-- Select Class --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="profileTeacherFields" style="display: none;">
+                        <div class="form-group">
+                            <label for="profileRole">Role</label>
+                            <select id="profileRole" required onchange="toggleProfileHomeroomClass()">
+                                <option value="">-- Select Role --</option>
+                                <option value="Exam Secretary Admin">Exam Secretary Admin</option>
+                                <option value="Regular Teacher">Regular Teacher</option>
+                                <option value="Homeroom Teacher">Homeroom Teacher</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="profileHomeroomClassGroup" style="display: none;">
+                            <label for="profileHomeroomClass">Assigned Class</label>
+                            <select id="profileHomeroomClass">
+                                <option value="">-- Select Class --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="profileSubject">Subject</label>
+                            <select id="profileSubject" required>
+                                <option value="">-- Select Subject --</option>
+                                <option value="Pengajian Am">Pengajian Am</option>
+                                <option value="Sejarah">Sejarah</option>
+                                <option value="Bahasa Melayu">Bahasa Melayu</option>
+                                <option value="Geografi">Geografi</option>
+                                <option value="KMK">KMK</option>
+                                <option value="Seni Visual">Seni Visual</option>
+                                <option value="ICT">ICT</option>
+                                <option value="Ekonomi">Ekonomi</option>
+                                <option value="None">None</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="profileNewPassword">New Password (leave blank to keep current)</label>
+                        <input type="password" id="profileNewPassword" placeholder="New password" minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="profileSaveBtn">💾 Save Changes</button>
                 </form>
             </div>
         </div>
@@ -208,7 +326,7 @@
         <div class="modal" id="resultModal">
             <button class="modal-close" onclick="closeResultModal()">✕</button>
             <h3 id="resultModalTitle">Add / Edit Result</h3>
-            <form id="resultForm" onsubmit="handleSaveResult(event)">
+            <form id="resultForm" onsubmit="return false;">
                 <input type="hidden" id="resultStudentId">
                 <input type="hidden" id="resultClassName">
                 <div class="form-group">
@@ -260,7 +378,7 @@
         <div class="modal" id="addClassModal">
             <button class="modal-close" onclick="closeAddClassModal()">✕</button>
             <h3 id="addClassModalTitle">Add New Class</h3>
-            <form id="addClassForm" onsubmit="handleSaveClass(event)">
+            <form id="addClassForm" onsubmit="return false;">
                 <input type="hidden" id="classEditMode" value="false">
                 <input type="hidden" id="originalClassName" value="">
                 <div class="form-group">
@@ -281,7 +399,7 @@
         <div class="modal" id="muetModal">
             <button class="modal-close" onclick="closeMuetModal()">✕</button>
             <h3>Set MUET Result</h3>
-            <form id="muetForm" onsubmit="handleSaveMuet(event)">
+            <form id="muetForm" onsubmit="return false;">
                 <input type="hidden" id="muetStudentId">
                 <input type="hidden" id="muetClassName">
                 <div class="form-group">
@@ -289,13 +407,13 @@
                     <select id="muetBand" required>
                         <option value="">-- Select Band --</option>
                         <option value="Band 1.0">Band 1</option>
-                        <option value="Band 1.5">Band 1</option>
-                        <option value="Band 2.0">Band 1</option>
-                        <option value="Band 2.5">Band 2</option>
-                        <option value="Band 3.0">Band 1</option>
-                        <option value="Band 3.5">Band 3</option>
-                        <option value="Band 4.0">Band 1</option>
-                        <option value="Band 4.5">Band 4</option>
+                        <option value="Band 1.5">Band 1.5</option>
+                        <option value="Band 2.0">Band 2</option>
+                        <option value="Band 2.5">Band 2.5</option>
+                        <option value="Band 3.0">Band 3</option>
+                        <option value="Band 3.5">Band 3.5</option>
+                        <option value="Band 4.0">Band 4</option>
+                        <option value="Band 4.5">Band 4.5</option>
                         <option value="Band 5.0">Band 5</option>
                     </select>
                 </div>
@@ -304,770 +422,102 @@
         </div>
     </div>
 
-    <!-- ==================== SCRIPTS ==================== -->
-    <script>
-        // ---- Firebase configuration ----
-        const firebaseConfig = {
-            apiKey: "AIzaSyCBjA_xaSAJdweodUsEMzvGY5R69I3esgE",
-            authDomain: "resultexam-25f4e.firebaseapp.com",
-            databaseURL: "https://resultexam-25f4e-default-rtdb.firebaseio.com",
-            projectId: "resultexam-25f4e",
-            storageBucket: "resultexam-25f4e.firebasestorage.app",
-            messagingSenderId: "1090858219421",
-            appId: "1:1090858219421:web:da3e3ddd4ab18027f06174",
-            measurementId: "G-RJ02VST99R"
-        };
-
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-
-        // ==================== UTILITY FUNCTIONS ====================
-
-        function showLoading() {
-            document.getElementById('loadingOverlay').classList.add('active');
-        }
-
-        function hideLoading() {
-            document.getElementById('loadingOverlay').classList.remove('active');
-        }
-
-        function showToast(message, type = 'info') {
-            const toastContainer = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.innerHTML = `${message}`;
-            toastContainer.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
-        }
-
-        function navigateTo(pageId) {
-            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
-            document.getElementById(`page-${pageId}`).classList.add('active');
-        }
-
-        // ==================== AUTHENTICATION ====================
-
-        async function handleStudentLogin(event) {
-            event.preventDefault();
-            const studentId = document.getElementById('studentIdInput').value.trim();
-            const password = document.getElementById('studentPasswordInput').value;
-
-            if (!studentId || !password) {
-                showToast('Please fill in all fields', 'error');
-                return;
-            }
-
-            showLoading();
-            try {
-                const doc = await db.collection('students').doc(studentId).get();
-                if (!doc.exists) {
-                    showToast('Invalid credentials', 'error');
-                    hideLoading();
-                    return;
-                }
-                const studentData = doc.data();
-                if (studentData.password !== password) {
-                    showToast('Invalid credentials', 'error');
-                    hideLoading();
-                    return;
-                }
-
-                sessionStorage.setItem('userType', 'student');
-                sessionStorage.setItem('userId', studentId);
-                sessionStorage.setItem('userName', studentData.name);
-                sessionStorage.setItem('userClass', studentData.class);
-
-                document.getElementById('studentNameDisplay').textContent = studentData.name;
-                document.getElementById('studentIdDisplay').textContent = `ID: ${studentId} | Class: ${studentData.class}`;
-
-                const muetBand = studentData.muetBand || null;
-                document.getElementById('muetDisplay').innerHTML = muetBand
-                    ? `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${muetBand}</div>`
-                    : '';
-
-                await loadStudentResults(studentId, studentData.class);
-                navigateTo('student-results');
-                showToast('Login successful!', 'success');
-            } catch (error) {
-                console.error('Login error:', error);
-                showToast('Login failed. Please try again.', 'error');
-            }
-            hideLoading();
-        }
-
-        async function handleTeacherLogin(event) {
-            event.preventDefault();
-            const staffId = document.getElementById('teacherStaffInput').value.trim();
-            const password = document.getElementById('teacherPasswordInput').value;
-
-            if (!staffId || !password) {
-                showToast('Please fill in all fields', 'error');
-                return;
-            }
-
-            showLoading();
-            try {
-                const doc = await db.collection('teachers').doc(staffId).get();
-                if (!doc.exists) {
-                    showToast('Invalid credentials', 'error');
-                    hideLoading();
-                    return;
-                }
-                const teacherData = doc.data();
-                if (teacherData.password !== password) {
-                    showToast('Invalid credentials', 'error');
-                    hideLoading();
-                    return;
-                }
-
-                sessionStorage.setItem('userType', 'teacher');
-                sessionStorage.setItem('userId', staffId);
-                sessionStorage.setItem('userName', teacherData.name);
-
-                document.getElementById('teacherNameDisplay').textContent = teacherData.name;
-                loadTeacherClasses();
-                navigateTo('teacher-dashboard');
-                showToast('Login successful!', 'success');
-            } catch (error) {
-                console.error('Login error:', error);
-                showToast('Login failed. Please try again.', 'error');
-            }
-            hideLoading();
-        }
-
-        function handleLogout() {
-            sessionStorage.clear();
-            navigateTo('main');
-            showToast('Logged out successfully', 'info');
-        }
-
-        // ==================== STUDENT RESULTS ====================
-
-        async function loadStudentResults(studentId, className) {
-            const contentDiv = document.getElementById('studentResultsContent');
-            contentDiv.innerHTML = '<p class="text-center text-light">Loading results...</p>';
-
-            try {
-                const ownSnap = await db.collection('results')
-                    .where('studentId', '==', studentId)
-                    .get();
-
-                if (ownSnap.empty) {
-                    contentDiv.innerHTML = '<p class="text-center text-light">No results found.</p>';
-                    document.getElementById('muetDisplay').innerHTML = '';
-                    return;
-                }
-
-                const grouped = {};
-                ownSnap.forEach(doc => {
-                    const r = doc.data();
-                    if (!grouped[r.term]) grouped[r.term] = [];
-                    grouped[r.term].push(r);
-                });
-
-                let html = '';
-                let overallNgpTotal = 0;
-                let overallCount = 0;
-
-                for (const [term, results] of Object.entries(grouped)) {
-                    let termNgpTotal = 0;
-                    html += `
-                    <div class="mb-24">
-                        <h3 class="term-heading">${term}</h3>
-                        <div class="table-wrapper">
-                            <table>
-                                <thead><tr><th>Subject</th><th>Percentage (%)</th><th>Grade</th><th>NGP</th></tr></thead>
-                                <tbody>`;
-                    results.forEach(r => {
-                        const grade = getGrade(r.marks);
-                        const ngp = getNGP(r.marks);
-                        termNgpTotal += ngp;
-                        overallNgpTotal += ngp;
-                        overallCount += 1;
-                        html += `<tr>
-                            <td>${r.subject}</td>
-                            <td>${r.marks}</td>
-                            <td><span class="badge badge-${grade.toLowerCase().replace(/[^a-z]/g, '')}">${grade}</span></td>
-                            <td>${ngp.toFixed(2)}</td>
-                        </tr>`;
-                    });
-                    const termAvgNgp = results.length ? (termNgpTotal / results.length).toFixed(2) : '0.00';
-                    html += `</tbody></table></div>
-                        <p class="fw-700 mt-8">Term Average NGP: ${termAvgNgp}</p>
-                    </div>`;
-                }
-
-                let ownAvgNgp = 0;
-                if (overallCount > 0) {
-                    ownAvgNgp = overallNgpTotal / overallCount;
-                    html += `<div class="result-summary">
-                        <strong>Overall Average NGP: ${ownAvgNgp.toFixed(2)}</strong>
-                    </div>`;
-                }
-
-                if (className) {
-                    try {
-                        const classResultsSnap = await db.collection('results')
-                            .where('className', '==', className)
-                            .get();
-
-                        const studentNgpMap = {};
-                        classResultsSnap.forEach(doc => {
-                            const r = doc.data();
-                            if (!studentNgpMap[r.studentId]) studentNgpMap[r.studentId] = { totalNgp: 0, count: 0 };
-                            studentNgpMap[r.studentId].totalNgp += getNGP(r.marks);
-                            studentNgpMap[r.studentId].count += 1;
-                        });
-
-                        const averages = Object.entries(studentNgpMap).map(([id, data]) => ({
-                            studentId: id,
-                            avgNgp: data.totalNgp / data.count
-                        }));
-                        averages.sort((a, b) => b.avgNgp - a.avgNgp);
-
-                        let position = 'N/A';
-                        if (averages.length > 0) {
-                            let rank = 1;
-                            let prevAvg = averages[0].avgNgp;
-                            for (let i = 0; i < averages.length; i++) {
-                                if (averages[i].avgNgp < prevAvg) {
-                                    rank = i + 1;
-                                    prevAvg = averages[i].avgNgp;
-                                }
-                                if (averages[i].studentId === studentId) {
-                                    position = rank;
-                                    break;
-                                }
-                            }
-                        }
-
-                        let status = '';
-                        if (ownAvgNgp >= 3.67) status = 'Excellent';
-                        else if (ownAvgNgp >= 3.00) status = 'Good';
-                        else if (ownAvgNgp >= 2.00) status = 'Satisfactory';
-                        else status = 'Needs Improvement';
-
-                        html += `
-                        <div class="status-container mt-12">
-                            <div class="status-badge green">
-                                <strong>🏅 Class Position: ${position}</strong> (based on NGP)
-                            </div>
-                            <div class="status-badge blue">
-                                <strong>📊 Academic Status: ${status}</strong>
-                            </div>
-                        </div>`;
-                    } catch (err) {
-                        console.error('Ranking error:', err);
-                        html += '<p class="text-light">Could not calculate class ranking.</p>';
-                    }
-                }
-
-                contentDiv.innerHTML = html;
-
-                const stuDoc = await db.collection('students').doc(studentId).get();
-                const muetBand = stuDoc.exists ? stuDoc.data().muetBand || null : null;
-                document.getElementById('muetDisplay').innerHTML = muetBand
-                    ? `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${muetBand}</div>`
-                    : '';
-
-            } catch (error) {
-                console.error('Error loading results:', error);
-                contentDiv.innerHTML = '<p class="text-center error-text">Error loading results.</p>';
-            }
-        }
-
-        // ==================== TEACHER CLASSES & STUDENTS ====================
-
-        async function loadTeacherClasses() {
-            const contentDiv = document.getElementById('classListContent');
-            contentDiv.innerHTML = '<p class="text-center text-light">Loading classes...</p>';
-            try {
-                const snapshot = await db.collection('classes').get();
-                if (snapshot.empty) {
-                    contentDiv.innerHTML = '<p class="text-center text-light">No classes found. Create your first class below.</p>';
-                    return;
-                }
-                let html = '<div class="class-list-grid">';
-                snapshot.forEach(doc => {
-                    const className = doc.id;
-                    const data = doc.data();
-                    const homeroom = data.homeroomTeacher || 'N/A';
-                    html += `
-                    <div class="class-item">
-                        <button class="btn btn-outline class-btn" onclick="selectClass('${className}')">
-                            <span class="class-name">${className}</span>
-                            <small class="homeroom">${homeroom}</small>
-                        </button>
-                        <div class="class-actions">
-                            <button class="btn btn-xs btn-primary" onclick="event.stopPropagation(); showEditClassModal('${className}', '${homeroom}')">✏️ Edit</button>
-                            <button class="btn btn-xs btn-danger" onclick="event.stopPropagation(); deleteClass('${className}')">🗑️ Delete</button>
-                        </div>
-                    </div>`;
-                });
-                html += '</div>';
-                contentDiv.innerHTML = html;
-            } catch (error) {
-                console.error('Error loading classes:', error);
-                contentDiv.innerHTML = '<p class="text-center error-text">Error loading classes.</p>';
-            }
-        }
-
-        function selectClass(className) {
-            sessionStorage.setItem('currentClass', className);
-            document.getElementById('currentClassName').textContent = className;
-            document.getElementById('classNameInline').textContent = className;
-            loadClassStudents(className);
-            navigateTo('teacher-class');
-        }
-
-        async function loadClassStudents(className) {
-            const contentDiv = document.getElementById('classStudentsContent');
-            contentDiv.innerHTML = '<p class="text-center text-light">Loading students...</p>';
-            try {
-                const snapshot = await db.collection('students')
-                    .where('class', '==', className)
-                    .get();
-
-                if (snapshot.empty) {
-                    contentDiv.innerHTML = '<p class="text-center text-light">No students in this class.</p>';
-                    return;
-                }
-
-                // Collect and sort students alphabetically by name
-                const studentsArray = [];
-                snapshot.forEach(doc => {
-                    studentsArray.push({ id: doc.id, ...doc.data() });
-                });
-                studentsArray.sort((a, b) => a.name.localeCompare(b.name));
-
-                let html = `
-                <div class="table-wrapper">
-                    <table>
-                        <thead><tr><th>Student ID</th><th>Name</th><th>Actions</th></tr></thead>
-                        <tbody>`;
-                studentsArray.forEach(student => {
-                    html += `<tr>
-                        <td>${student.id}</td>
-                        <td>${student.name}</td>
-                        <td>
-                            <button class="btn btn-xs btn-primary" onclick="showResultModal('${student.id}', '${student.name}', '${className}')">📝 Results</button>
-                            <button class="btn btn-xs btn-accent" onclick="showMuetModal('${student.id}', '${className}')">🎤 MUET</button>
-                            <button class="btn btn-xs btn-danger" onclick="deleteStudent('${student.id}', '${className}')">🗑️ Delete</button>
-                        </td>
-                    </tr>`;
-                });
-                html += '</tbody></table></div>';
-                contentDiv.innerHTML = html;
-            } catch (error) {
-                console.error('Error loading students:', error);
-                contentDiv.innerHTML = '<p class="text-center error-text">Error loading students.</p>';
-            }
-        }
-
-        // ==================== RESULT MANAGEMENT (TEACHER) ====================
-
-        function showResultModal(studentId, studentName, className) {
-            document.getElementById('resultStudentId').value = studentId;
-            document.getElementById('resultClassName').value = className;
-            document.getElementById('resultModalTitle').textContent = `Add / Edit Result for ${studentName}`;
-            loadExistingResults(studentId);
-            document.getElementById('resultModalOverlay').classList.add('active');
-        }
-
-        function closeResultModal() {
-            document.getElementById('resultModalOverlay').classList.remove('active');
-            document.getElementById('resultForm').reset();
-        }
-
-        async function loadExistingResults(studentId) {
-            const listDiv = document.getElementById('existingResultsList');
-            listDiv.innerHTML = '<p class="text-light small-text">Loading...</p>';
-            try {
-                const snapshot = await db.collection('results')
-                    .where('studentId', '==', studentId)
-                    .get();
-                if (snapshot.empty) {
-                    listDiv.innerHTML = '<p class="text-light small-text">No results yet.</p>';
-                    return;
-                }
-                let html = '';
-                snapshot.forEach(doc => {
-                    const r = doc.data();
-                    const grade = getGrade(r.marks);
-                    html += `
-                    <div class="existing-result-item">
-                        <strong>${r.subject}</strong> - ${r.term}: ${r.marks}/100 
-                        <span class="badge badge-${grade.toLowerCase().replace(/[^a-z]/g, '')}">${grade}</span>
-                        <button class="btn btn-xs btn-danger delete-btn" onclick="deleteResult('${doc.id}')">Delete</button>
-                    </div>`;
-                });
-                listDiv.innerHTML = html;
-            } catch (error) {
-                console.error('Error loading existing results:', error);
-                listDiv.innerHTML = '<p class="error-text small-text">Error loading results.</p>';
-            }
-        }
-
-        async function handleSaveResult(event) {
-            event.preventDefault();
-            const studentId = document.getElementById('resultStudentId').value;
-            const className = document.getElementById('resultClassName').value;
-            const subject = document.getElementById('resultSubject').value.trim();
-            const term = document.getElementById('resultTerm').value;
-            const marks = parseInt(document.getElementById('resultMarks').value);
-
-            if (!subject || !term || isNaN(marks)) {
-                showToast('Please fill in all fields', 'error');
-                return;
-            }
-
-            showLoading();
-            try {
-                const existingSnapshot = await db.collection('results')
-                    .where('studentId', '==', studentId)
-                    .where('subject', '==', subject)
-                    .where('term', '==', term)
-                    .limit(1)
-                    .get();
-
-                if (!existingSnapshot.empty) {
-                    const docId = existingSnapshot.docs[0].id;
-                    await db.collection('results').doc(docId).update({
-                        marks: marks,
-                        updatedAt: new Date().toISOString()
-                    });
-                    showToast('Result updated successfully!', 'success');
-                } else {
-                    await db.collection('results').add({
-                        studentId: studentId,
-                        className: className,
-                        subject: subject,
-                        term: term,
-                        marks: marks,
-                        createdAt: new Date().toISOString()
-                    });
-                    showToast('Result added successfully!', 'success');
-                }
-                document.getElementById('resultForm').reset();
-                loadExistingResults(studentId);
-            } catch (error) {
-                console.error('Error saving result:', error);
-                showToast('Failed to save result. Create a Firestore composite index for: studentId, subject, term.', 'error');
-            }
-            hideLoading();
-        }
-
-        async function deleteResult(resultId) {
-            if (!confirm('Are you sure you want to delete this result?')) return;
-            showLoading();
-            try {
-                await db.collection('results').doc(resultId).delete();
-                const studentId = document.getElementById('resultStudentId').value;
-                loadExistingResults(studentId);
-                showToast('Result deleted successfully!', 'success');
-            } catch (error) {
-                console.error('Error deleting result:', error);
-                showToast('Failed to delete result.', 'error');
-            }
-            hideLoading();
-        }
-
-        // ==================== DELETE STUDENT ====================
-        async function deleteStudent(studentId, className) {
-            if (!confirm(`Are you sure you want to permanently delete student "${studentId}"? This will remove their account and all associated results.`)) return;
-            showLoading();
-            try {
-                // Delete the student document
-                await db.collection('students').doc(studentId).delete();
-
-                // Delete all results for this student
-                const resultsSnap = await db.collection('results')
-                    .where('studentId', '==', studentId)
-                    .get();
-                const batch = db.batch();
-                resultsSnap.forEach(doc => batch.delete(doc.ref));
-                await batch.commit();
-
-                showToast('Student deleted successfully!', 'success');
-                // Refresh the class student list
-                loadClassStudents(className);
-            } catch (error) {
-                console.error('Error deleting student:', error);
-                showToast('Failed to delete student.', 'error');
-            }
-            hideLoading();
-        }
-
-        // ==================== MUET MANAGEMENT ====================
-
-        function showMuetModal(studentId, className) {
-            document.getElementById('muetStudentId').value = studentId;
-            document.getElementById('muetClassName').value = className;
-            document.getElementById('muetModalOverlay').classList.add('active');
-        }
-
-        function closeMuetModal() {
-            document.getElementById('muetModalOverlay').classList.remove('active');
-            document.getElementById('muetForm').reset();
-        }
-
-        async function handleSaveMuet(event) {
-            event.preventDefault();
-            const studentId = document.getElementById('muetStudentId').value;
-            const band = document.getElementById('muetBand').value;
-
-            if (!band) {
-                showToast('Please select a band', 'error');
-                return;
-            }
-
-            showLoading();
-            try {
-                await db.collection('students').doc(studentId).update({
-                    muetBand: band
-                });
-                showToast('MUET result saved!', 'success');
-                closeMuetModal();
-            } catch (error) {
-                console.error('Error saving MUET:', error);
-                showToast('Failed to save MUET result.', 'error');
-            }
-            hideLoading();
-        }
-
-        // ==================== REGISTRATION ====================
-
-        async function handleRegisterStudent(event) {
-            event.preventDefault();
-            const name = document.getElementById('regStudentName').value.trim();
-            const studentId = document.getElementById('regStudentId').value.trim();
-            const className = document.getElementById('regStudentClass').value;
-            const password = document.getElementById('regStudentPassword').value;
-
-            if (!name || !studentId || !className || !password) {
-                showToast('Please fill in all fields', 'error');
-                return;
-            }
-
-            showLoading();
-            try {
-                const existingDoc = await db.collection('students').doc(studentId).get();
-                await db.collection('students').doc(studentId).set({
-                    name: name,
-                    class: className,
-                    password: password,
-                    createdAt: existingDoc.exists ? existingDoc.data().createdAt : new Date().toISOString()
-                }, { merge: true });
-                showToast(existingDoc.exists ? 'Student updated successfully!' : 'Student registered successfully!', 'success');
-                document.getElementById('registerStudentForm').reset();
-                navigateTo('main');
-            } catch (error) {
-                console.error('Registration error:', error);
-                showToast('Registration failed.', 'error');
-            }
-            hideLoading();
-        }
-
-        async function handleRegisterTeacher(event) {
-            event.preventDefault();
-            const name = document.getElementById('regTeacherName').value.trim();
-            const staffId = document.getElementById('regTeacherStaff').value.trim();
-            const password = document.getElementById('regTeacherPassword').value;
-
-            if (!name || !staffId || !password) {
-                showToast('Please fill in all fields', 'error');
-                return;
-            }
-
-            showLoading();
-            try {
-                const existingDoc = await db.collection('teachers').doc(staffId).get();
-                await db.collection('teachers').doc(staffId).set({
-                    name: name,
-                    password: password,
-                    createdAt: existingDoc.exists ? existingDoc.data().createdAt : new Date().toISOString()
-                }, { merge: true });
-                showToast(existingDoc.exists ? 'Teacher updated successfully!' : 'Teacher registered successfully!', 'success');
-                document.getElementById('registerTeacherForm').reset();
-                navigateTo('main');
-            } catch (error) {
-                console.error('Registration error:', error);
-                showToast('Registration failed.', 'error');
-            }
-            hideLoading();
-        }
-
-        // ==================== CLASS MANAGEMENT ====================
-
-        function showAddClassModal() {
-            document.getElementById('classEditMode').value = 'false';
-            document.getElementById('originalClassName').value = '';
-            document.getElementById('newClassName').value = '';
-            document.getElementById('homeroomTeacherInput').value = '';
-            document.getElementById('addClassModalTitle').textContent = 'Add New Class';
-            document.getElementById('saveClassBtn').textContent = '➕ Create Class';
-            document.getElementById('newClassName').readOnly = false;
-            document.getElementById('addClassModalOverlay').classList.add('active');
-        }
-
-        function showEditClassModal(className, homeroom) {
-            document.getElementById('classEditMode').value = 'true';
-            document.getElementById('originalClassName').value = className;
-            document.getElementById('newClassName').value = className;
-            document.getElementById('homeroomTeacherInput').value = homeroom;
-            document.getElementById('addClassModalTitle').textContent = 'Edit Class';
-            document.getElementById('saveClassBtn').textContent = '💾 Update Class';
-            document.getElementById('newClassName').readOnly = true;
-            document.getElementById('addClassModalOverlay').classList.add('active');
-        }
-
-        function closeAddClassModal() {
-            document.getElementById('addClassModalOverlay').classList.remove('active');
-            document.getElementById('addClassForm').reset();
-            document.getElementById('newClassName').readOnly = false;
-        }
-
-        async function handleSaveClass(event) {
-            event.preventDefault();
-            const editMode = document.getElementById('classEditMode').value === 'true';
-            const originalClassName = document.getElementById('originalClassName').value.trim();
-            const className = document.getElementById('newClassName').value.trim();
-            const homeroomTeacher = document.getElementById('homeroomTeacherInput').value.trim();
-
-            if (!className || !homeroomTeacher) {
-                showToast('Please fill in all fields', 'error');
-                return;
-            }
-
-            showLoading();
-            try {
-                if (editMode) {
-                    await db.collection('classes').doc(originalClassName).update({
-                        homeroomTeacher: homeroomTeacher,
-                        name: originalClassName
-                    });
-                    showToast('Class updated successfully!', 'success');
-                } else {
-                    const existingDoc = await db.collection('classes').doc(className).get();
-                    if (existingDoc.exists) {
-                        showToast('Class already exists', 'error');
-                        hideLoading();
-                        return;
-                    }
-                    await db.collection('classes').doc(className).set({
-                        name: className,
-                        homeroomTeacher: homeroomTeacher,
-                        createdAt: new Date().toISOString()
-                    });
-                    showToast('Class created successfully!', 'success');
-                }
-                closeAddClassModal();
-                loadTeacherClasses();
-            } catch (error) {
-                console.error('Error saving class:', error);
-                showToast('Failed to save class.', 'error');
-            }
-            hideLoading();
-        }
-
-        async function deleteClass(className) {
-            if (!confirm(`Are you sure you want to delete the class "${className}"? This action cannot be undone.`)) return;
-            showLoading();
-            try {
-                await db.collection('classes').doc(className).delete();
-                showToast('Class deleted successfully!', 'success');
-                loadTeacherClasses();
-            } catch (error) {
-                console.error('Error deleting class:', error);
-                showToast('Failed to delete class.', 'error');
-            }
-            hideLoading();
-        }
-
-        // ==================== UTILITIES ====================
-
-        function getGrade(marks) {
-            if (marks >= 80) return 'A';
-            if (marks >= 70) return 'A-';
-            if (marks >= 65) return 'B+';
-            if (marks >= 60) return 'B';
-            if (marks >= 55) return 'B-';
-            if (marks >= 50) return 'C+';
-            if (marks >= 45) return 'C';
-            if (marks >= 40) return 'C-';
-            if (marks >= 35) return 'D+';
-            if (marks >= 30) return 'D';
-            return 'F';
-        }
-
-        function getNGP(marks) {
-            if (marks >= 80) return 4.0;
-            if (marks >= 70) return 3.67;
-            if (marks >= 65) return 3.33;
-            if (marks >= 60) return 3.00;
-            if (marks >= 55) return 2.67;
-            if (marks >= 50) return 2.33;
-            if (marks >= 45) return 2.00;
-            if (marks >= 40) return 1.67;
-            if (marks >= 35) return 1.33;
-            if (marks >= 30) return 1.00;
-            return 0.0;
-        }
-
-        async function loadClassesForRegistration() {
-            const select = document.getElementById('regStudentClass');
-            try {
-                const snapshot = await db.collection('classes').get();
-                select.innerHTML = '<option value="">-- Select Class --</option>';
-                snapshot.forEach(doc => {
-                    const option = document.createElement('option');
-                    option.value = doc.id;
-                    option.textContent = doc.id;
-                    select.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error loading classes for registration:', error);
-            }
-        }
-
-        // ==================== INITIALIZATION ====================
-
-        document.addEventListener('DOMContentLoaded', function() {
-            loadClassesForRegistration();
-
-            const userType = sessionStorage.getItem('userType');
-            const userId = sessionStorage.getItem('userId');
-
-            if (userType && userId) {
-                if (userType === 'student') {
-                    document.getElementById('studentNameDisplay').textContent = sessionStorage.getItem('userName');
-                    document.getElementById('studentIdDisplay').textContent = `ID: ${userId}`;
-                    const userClass = sessionStorage.getItem('userClass');
-                    db.collection('students').doc(userId).get().then(doc => {
-                        if (doc.exists && doc.data().muetBand) {
-                            document.getElementById('muetDisplay').innerHTML = `<div class="badge badge-b">MUET: ${doc.data().muetBand}</div>`;
-                        }
-                    });
-                    loadStudentResults(userId, userClass);
-                    navigateTo('student-results');
-                } else if (userType === 'teacher') {
-                    document.getElementById('teacherNameDisplay').textContent = sessionStorage.getItem('userName');
-                    loadTeacherClasses();
-                    navigateTo('teacher-dashboard');
-                }
-            }
-
-            document.getElementById('resultModalOverlay').addEventListener('click', function(e) {
-                if (e.target === this) closeResultModal();
-            });
-            document.getElementById('addClassModalOverlay').addEventListener('click', function(e) {
-                if (e.target === this) closeAddClassModal();
-            });
-            document.getElementById('muetModalOverlay').addEventListener('click', function(e) {
-                if (e.target === this) closeMuetModal();
-            });
-        });
-    </script>
+    <!-- ==================== MODAL: Reset Password ==================== -->
+    <div class="modal-overlay" id="resetPasswordModalOverlay">
+        <div class="modal" id="resetPasswordModal">
+            <button class="modal-close" onclick="closeResetPasswordModal()">✕</button>
+            <h3>Reset Password</h3>
+            <form id="resetPasswordForm" onsubmit="return false;">
+                <input type="hidden" id="resetUserType" value="">
+                <div class="form-group">
+                    <label id="resetIdLabel">ID / Staff Number</label>
+                    <input type="text" id="resetUserId" placeholder="Enter your ID" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="resetFullName">Full Name</label>
+                    <input type="text" id="resetFullName" placeholder="Enter your full name" required>
+                </div>
+                <div class="form-group">
+                    <label for="resetNewPassword">New Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="resetNewPassword" placeholder="Create new password" required minlength="6">
+                        <button type="button" class="toggle-password" id="toggleResetPassword">👁️</button>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">🔐 Reset Password</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: Exam Analysis (per class) ==================== -->
+    <div class="modal-overlay" id="analysisModalOverlay">
+        <div class="modal" id="analysisModal" style="max-width: 700px;">
+            <div class="modal-header-actions" style="display: flex; gap: 8px; position: absolute; top: 12px; right: 16px;">
+                <button class="btn btn-sm btn-outline btn-auto" onclick="printAnalysisWithInfo()">🖨️ Print</button>
+                <button class="modal-close" onclick="closeAnalysisModal()">✕</button>
+            </div>
+            <h3 id="analysisModalTitle">📊 Class Exam Analysis</h3>
+            <div class="form-group" id="analysisTermFilterGroup">
+                <label for="analysisTermFilter">Filter by Term</label>
+                <select id="analysisTermFilter" onchange="runAnalysis()">
+                    <option value="">All Terms</option>
+                    <option value="Sem 1">Sem 1</option>
+                    <option value="Pertengahan Sem 1">Pertengahan Sem 1</option>
+                    <option value="Percubaan Sem 1">Percubaan Sem 1</option>
+                    <option value="Sem 2">Sem 2</option>
+                    <option value="Pertengahan Sem 2">Pertengahan Sem 2</option>
+                    <option value="Percubaan Sem 2">Percubaan Sem 2</option>
+                    <option value="Sem 3">Sem 3</option>
+                    <option value="Pertengahan Sem 3">Pertengahan Sem 3</option>
+                    <option value="Percubaan Sem 3">Percubaan Sem 3</option>
+                </select>
+            </div>
+            <div id="analysisPrintArea">
+                <div id="analysisContent">
+                    <p class="text-center text-light">Select a class and click "Analysis" to load data.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL: Global Exam Analysis ==================== -->
+    <div class="modal-overlay" id="globalAnalysisModalOverlay">
+        <div class="modal" id="globalAnalysisModal" style="max-width: 700px;">
+            <div class="modal-header-actions" style="display: flex; gap: 8px; position: absolute; top: 12px; right: 16px;">
+                <button class="btn btn-sm btn-outline btn-auto" onclick="printGlobalAnalysisWithInfo()">🖨️ Print</button>
+                <button class="modal-close" onclick="closeGlobalAnalysisModal()">✕</button>
+            </div>
+            <h3>📊 Exam Analysis</h3>
+            <div class="form-group">
+                <label for="globalAnalysisClass">Class</label>
+                <select id="globalAnalysisClass" onchange="runGlobalAnalysis()">
+                    <option value="__all__">All Classes</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="globalAnalysisTerm">Term</label>
+                <select id="globalAnalysisTerm" onchange="runGlobalAnalysis()">
+                    <option value="">All Terms</option>
+                    <option value="Sem 1">Sem 1</option>
+                    <option value="Pertengahan Sem 1">Pertengahan Sem 1</option>
+                    <option value="Percubaan Sem 1">Percubaan Sem 1</option>
+                    <option value="Sem 2">Sem 2</option>
+                    <option value="Pertengahan Sem 2">Pertengahan Sem 2</option>
+                    <option value="Percubaan Sem 2">Percubaan Sem 2</option>
+                    <option value="Sem 3">Sem 3</option>
+                    <option value="Pertengahan Sem 3">Pertengahan Sem 3</option>
+                    <option value="Percubaan Sem 3">Percubaan Sem 3</option>
+                </select>
+            </div>
+            <div id="globalAnalysisPrintArea">
+                <div id="globalAnalysisContent">
+                    <p class="text-center text-light">Select filters to view analysis.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- External JavaScript -->
+    <script src="app.js"></script>
 </body>
 </html>
