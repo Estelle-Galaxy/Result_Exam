@@ -1,523 +1,1546 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>School Result Management System</title>
+// ---- Firebase configuration ----
+const firebaseConfig = {
+    apiKey: "AIzaSyCBjA_xaSAJdweodUsEMzvGY5R69I3esgE",
+    authDomain: "resultexam-25f4e.firebaseapp.com",
+    databaseURL: "https://resultexam-25f4e-default-rtdb.firebaseio.com",
+    projectId: "resultexam-25f4e",
+    storageBucket: "resultexam-25f4e.firebasestorage.app",
+    messagingSenderId: "1090858219421",
+    appId: "1:1090858219421:web:da3e3ddd4ab18027f06174",
+    measurementId: "G-RJ02VST99R"
+};
 
-    <!-- Firebase SDKs (Compat Mode) -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
-    <!-- External Stylesheet -->
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
+// ==================== UTILITY FUNCTIONS ====================
 
-    <!-- ==================== LOADING OVERLAY ==================== -->
-    <div class="loading-overlay" id="loadingOverlay">
-        <div class="loading-box">
-            <div class="spinner"></div>
-            <p class="loading-text">Processing...</p>
-        </div>
-    </div>
+function showLoading() {
+    document.getElementById('loadingOverlay').classList.add('active');
+}
 
-    <div class="video-background">
-        <video autoplay loop muted>
-            <source src="rolling-hills-under-a-blue-sky-moewalls-com.mp4" type="video/mp4">
-        </video>
-    </div>
+function hideLoading() {
+    document.getElementById('loadingOverlay').classList.remove('active');
+}
 
-    <!-- ==================== TOAST CONTAINER ==================== -->
-    <div id="toastContainer"></div>
+function showToast(message, type = 'info') {
+    const toastContainer = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `${message}`;
+    toastContainer.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+}
 
-    <!-- ==================== APP CONTAINER ==================== -->
-    <div class="app-container" id="appContainer">
+function navigateTo(pageId) {
+    document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+    const targetPage = document.getElementById(`page-${pageId}`);
+    if (targetPage) targetPage.classList.add('active');
+}
 
-        <!-- ========== PAGE: MAIN (Role Selection) ========== -->
-        <div class="page active" id="page-main">
-            <div class="card">
-                <div class="app-logo">
-                    <div class="icon-circle">
-                        <img id="appLogoImage" src="WhatsApp Image 2026-05-07 at 7.21.40 AM.jpeg" alt="Logo" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">
-                    </div>
-                </div>
-                <h1 class="app-title">PTE SMK Badin</h1>
-                <p class="app-subtitle">Keputusan Peperiksaan Dalaman Tingkatan 6 SMK Badin</p>
-                <p class="app-subtitle">Select your role to continue</p>
-                <div class="btn-group mb-12">
-                    <button class="btn btn-primary" onclick="navigateTo('student-login')">🧑‍🎓 I'm a Student</button>
-                    <button class="btn btn-accent" onclick="navigateTo('teacher-login')">👩‍🏫 I'm a Teacher</button>
-                </div>
-                <div class="btn-group">
-                    <button class="btn btn-outline" onclick="navigateTo('register-student')">📝 Register Student</button>
-                    <button class="btn btn-outline" onclick="navigateTo('register-teacher')">📋 Register Teacher</button>
-                </div>
+// ==================== PRINT FUNCTION ====================
+
+function printContent(areaId, reportTitle = 'Pusat Tingkatan Enam SMK Badin', reportSubtitle = '') {
+    const printArea = document.getElementById(areaId);
+    if (!printArea) {
+        showToast('Nothing to print.');
+        return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (!printWindow) {
+        showToast('Popup blocked. Please allow popups for this site.', 'error');
+        return;
+    }
+
+    const contentHTML = printArea.innerHTML;
+
+    // Reliable logo source
+    let logoSrc = '';
+    const logoImg = document.getElementById('appLogoImage');
+    if (logoImg && logoImg.src) {
+        logoSrc = logoImg.src;
+    } else {
+        const fallbackImg = document.querySelector('.icon-circle img');
+        if (fallbackImg && fallbackImg.src) {
+            logoSrc = fallbackImg.src;
+        }
+    }
+
+    const printCSS = `
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                margin: 20px;
+                color: #000;
+                background: #fff;
+            }
+
+            .print-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                border-bottom: 2px solid #000;
+                padding-bottom: 10px;
+                margin-bottom: 20px;
+            }
+            .print-logo {
+                width: 70px;
+                height: 70px;
+                border-radius: 50%;
+                object-fit: cover;
+            }
+            .print-title-box {
+                text-align: center;
+                flex: 1;
+            }
+            .print-title {
+                font-size: 1.4rem;
+                font-weight: 700;
+                margin: 0;
+            }
+            .print-subtitle {
+                font-size: 0.9rem;
+                margin-top: 6px;
+                color: #333;
+            }
+
+            table {
+                border-collapse: collapse;
+                width: 100%;
+                margin-bottom: 16px;
+            }
+            th, td {
+                border: 1px solid #ccc;
+                padding: 8px;
+                text-align: left;
+            }
+            th {
+                background: #f0f0f0;
+            }
+
+            .badge {
+                display: inline-block;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 0.8rem;
+                font-weight: 600;
+                color: #000;
+                background: #e2e8f0;
+            }
+
+            .term-heading, .result-summary, .status-container, h3, h4, h2 {
+                color: #000;
+                background: none;
+                border-left: none;
+            }
+            .status-badge {
+                border: 1px solid #ccc;
+                padding: 10px;
+                margin-bottom: 8px;
+            }
+            .flex-between, .btn, .toggle-password, .forgot-link,
+            .modal-close, .modal-header-actions {
+                display: none;
+            }
+        </style>
+    `;
+
+    const logoHTML = logoSrc
+        ? `<img class="print-logo" src="${logoSrc}" alt="Logo" />`
+        : `<div class="print-logo"></div>`;
+
+    const headerHTML = `
+        <div class="print-header">
+            ${logoHTML}
+            <div class="print-title-box">
+                <h1 class="print-title">${reportTitle}</h1>
+                ${reportSubtitle ? `<p class="print-subtitle">${reportSubtitle}</p>` : ''}
             </div>
         </div>
+    `;
 
-        <!-- ========== PAGE: Student Login ========== -->
-        <div class="page" id="page-student-login">
-            <div class="card">
-                <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
-                <h2 class="app-title">Student Login</h2>
-                <p class="app-subtitle">Enter your Identification Number & Password</p>
-                <form id="studentLoginForm" onsubmit="return false;">
-                    <div class="form-group">
-                        <label for="studentIdInput">Identification Number</label>
-                        <input type="text" id="studentIdInput" placeholder="e.g. 011011120000" required autocomplete="off">
-                    </div>
-                    <div class="form-group">
-                        <label for="studentPasswordInput">Password</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="studentPasswordInput" placeholder="Enter your password" required>
-                            <button type="button" class="toggle-password" id="toggleStudentPassword">👁️</button>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary" id="studentLoginBtn">🔑 Login</button>
-                    <p class="forgot-link" onclick="openResetPasswordModal('student')">Forgot Password?</p>
-                </form>
-            </div>
-        </div>
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Print</title>
+            ${printCSS}
+        </head>
+        <body>
+            ${headerHTML}
+            ${contentHTML}
+        </body>
+        </html>
+    `);
 
-        <!-- ========== PAGE: Student Results ========== -->
-        <div class="page" id="page-student-results">
-            <div class="card wide">
-                <div class="flex-between mb-16">
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout('student')">← Logout</button>
-                        <button class="btn btn-sm btn-outline btn-auto" onclick="printContent('studentResultsPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Keputusan Peperiksaan Keseluruhan')">🖨️ Print</button>
-                        <button class="btn btn-sm btn-outline btn-auto" onclick="openProfile()">👤 Profile</button>
-                    </div>
-                    <span class="fw-700" id="studentNameDisplay"></span>
-                </div>
-                <h2 class="app-title">📊 My Examination Results</h2>
-                <p class="app-subtitle" id="studentIdDisplay"></p>
-                <div id="studentResultsPrintArea">
-                    <div id="muetDisplay" class="mb-16"></div>
-                    <div id="studentResultsContent">
-                        <p class="text-center text-light">Loading results...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+    printWindow.document.close();
+    printWindow.focus();
 
-        <!-- ========== PAGE: Teacher Login ========== -->
-        <div class="page" id="page-teacher-login">
-            <div class="card">
-                <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
-                <h2 class="app-title">Teacher Login</h2>
-                <p class="app-subtitle">Enter your Staff Number & Password</p>
-                <form id="teacherLoginForm" onsubmit="return false;">
-                    <div class="form-group">
-                        <label for="teacherStaffInput">Staff Number</label>
-                        <input type="text" id="teacherStaffInput" placeholder="e.g. T2024001" required autocomplete="off">
-                    </div>
-                    <div class="form-group">
-                        <label for="teacherPasswordInput">Password</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="teacherPasswordInput" placeholder="Enter your password" required>
-                            <button type="button" class="toggle-password" id="toggleTeacherPassword">👁️</button>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-accent" id="teacherLoginBtn">🔑 Login</button>
-                    <p class="forgot-link" onclick="openResetPasswordModal('teacher')">Forgot Password?</p>
-                </form>
-            </div>
-        </div>
+    setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+    }, 500);
+}
 
-        <!-- ========== PAGE: Teacher Dashboard ========== -->
-        <div class="page" id="page-teacher-dashboard">
-            <div class="card wide">
-                <div class="flex-between mb-16">
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout('teacher')">← Logout</button>
-                        <button class="btn btn-sm btn-outline btn-auto" onclick="openProfile()">👤 Profile</button>
-                    </div>
-                    <span class="fw-700" id="teacherNameDisplay"></span>
-                </div>
-                <h2 class="app-title">📚 Select a Class</h2>
-                <p class="app-subtitle">Choose a class to manage student results</p>
-                <div id="classListContent">
-                    <p class="text-center text-light">Loading classes...</p>
-                </div>
-                <div class="text-center mt-16">
-                    <button class="btn btn-outline btn-sm btn-auto" onclick="openGlobalAnalysisModal()">
-                        📊 Exam Analysis
-                    </button>
-                </div>
-                <div class="mt-16">
-                    <button class="btn btn-outline btn-sm btn-auto" onclick="showAddClassModal()">+ Add New Class</button>
-                </div>
-            </div>
-        </div>
+// ==================== PASSWORD TOGGLE (hold to show) ====================
 
-        <!-- ========== PAGE: Teacher Class Management ========== -->
-        <div class="page" id="page-teacher-class">
-            <div class="card wide">
-                <div class="flex-between mb-16">
-                    <button class="btn btn-sm btn-outline btn-auto" onclick="navigateTo('teacher-dashboard')">← Back to Classes</button>
-                    <span class="fw-700" id="currentClassName"></span>
-                </div>
-                <h2 class="app-title">👨‍🎓 Students in <span id="classNameInline"></span></h2>
-                <p class="app-subtitle">Click "Add/Edit Results" to manage examination scores</p>
-                <div class="text-center mb-16">
-                    <button class="btn btn-sm btn-outline" onclick="printAnalysisWithInfo()" style="width: auto; margin: 0 auto;">
-                        📊 Class Analysis
-                    </button>
-                </div>
-                <div id="classStudentsContent">
-                    <p class="text-center text-light">Loading students...</p>
-                </div>
-            </div>
-        </div>
+function setupPasswordToggle(inputId, btnId) {
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(btnId);
+    if (!input || !btn) return;
 
-        <!-- ========== PAGE: Register Student ========== -->
-        <div class="page" id="page-register-student">
-            <div class="card">
-                <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
-                <h2 class="app-title">📝 Register Student</h2>
-                <p class="app-subtitle">Create a new student account or update existing</p>
-                <form id="registerStudentForm" onsubmit="return false;">
-                    <div class="form-group">
-                        <label for="regStudentName">Full Name</label>
-                        <input type="text" id="regStudentName" placeholder="Enter student's full name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="regStudentId">Identification Number</label>
-                        <input type="text" id="regStudentId" placeholder="e.g. 011011120000" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="regStudentClass">Class</label>
-                        <select id="regStudentClass" required>
-                            <option value="">-- Select Class --</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="regStudentPassword">Password</label>
-                        <input type="password" id="regStudentPassword" placeholder="Create a password" required minlength="6">
-                    </div>
-                    <button type="submit" class="btn btn-primary" id="regStudentBtn">💾 Register / Update Student</button>
-                </form>
-            </div>
-        </div>
+    btn.addEventListener('mousedown', () => { input.type = 'text'; });
+    btn.addEventListener('mouseup', () => { input.type = 'password'; });
+    btn.addEventListener('mouseleave', () => { input.type = 'password'; });
+    btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        input.type = 'text';
+    });
+    btn.addEventListener('touchend', () => { input.type = 'password'; });
+}
 
-        <!-- ========== PAGE: Register Teacher ========== -->
-        <div class="page" id="page-register-teacher">
-            <div class="card">
-                <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
-                <h2 class="app-title">📋 Register Teacher</h2>
-                <p class="app-subtitle">Create a new teacher account or update existing</p>
-                <form id="registerTeacherForm" onsubmit="return false;">
-                    <div class="form-group">
-                        <label for="regTeacherName">Full Name</label>
-                        <input type="text" id="regTeacherName" placeholder="Enter teacher's full name" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="regTeacherStaff">Staff Number</label>
-                        <input type="text" id="regTeacherStaff" placeholder="e.g. T2024001" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="regTeacherRole">Role</label>
-                        <select id="regTeacherRole" required onchange="toggleHomeroomClass()">
-                            <option value="">-- Select Role --</option>
-                            <option value="Exam Secretary Admin">Exam Secretary Admin</option>
-                            <option value="Regular Teacher">Regular Teacher</option>
-                            <option value="Homeroom Teacher">Homeroom Teacher</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="homeroomClassGroup" style="display: none;">
-                        <label for="regTeacherHomeroomClass">Assigned Class</label>
-                        <select id="regTeacherHomeroomClass">
-                            <option value="">-- Select Class --</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="regTeacherSubject">Subject</label>
-                        <select id="regTeacherSubject" required>
-                            <option value="">-- Select Subject --</option>
-                            <option value="Pengajian Am">Pengajian Am</option>
-                            <option value="Sejarah">Sejarah</option>
-                            <option value="Bahasa Melayu">Bahasa Melayu</option>
-                            <option value="Geografi">Geografi</option>
-                            <option value="KMK">KMK</option>
-                            <option value="Seni Visual">Seni Visual</option>
-                            <option value="ICT">ICT</option>
-                            <option value="Ekonomi">Ekonomi</option>
-                            <option value="None">None</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="regTeacherPassword">Password</label>
-                        <input type="password" id="regTeacherPassword" placeholder="Create a password" required minlength="6">
-                    </div>
-                    <button type="submit" class="btn btn-accent" id="regTeacherBtn">💾 Register / Update Teacher</button>
-                </form>
-            </div>
-        </div>
+// ==================== RESET PASSWORD MODAL ====================
 
-        <!-- ========== PAGE: Profile ========== -->
-        <div class="page" id="page-profile">
-            <div class="card">
-                <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="goBackFromProfile()">← Back</button>
-                <h2 class="app-title">👤 My Profile</h2>
-                <p class="app-subtitle">View and update your personal details</p>
-                <form id="profileForm" onsubmit="return false;">
-                    <input type="hidden" id="profileUserType" value="">
-                    <input type="hidden" id="profileUserId" value="">
-                    <div class="form-group">
-                        <label for="profileName">Full Name</label>
-                        <input type="text" id="profileName" placeholder="Your full name" required>
+function openResetPasswordModal(userType) {
+    document.getElementById('resetUserType').value = userType;
+    document.getElementById('resetIdLabel').textContent = userType === 'student' ? 'Student ID' : 'Staff Number';
+    document.getElementById('resetPasswordModalOverlay').classList.add('active');
+}
+
+function closeResetPasswordModal() {
+    document.getElementById('resetPasswordModalOverlay').classList.remove('active');
+    document.getElementById('resetPasswordForm').reset();
+}
+
+// ==================== EVENT LISTENER BINDING ====================
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('studentLoginForm').addEventListener('submit', handleStudentLogin);
+    document.getElementById('teacherLoginForm').addEventListener('submit', handleTeacherLogin);
+    document.getElementById('registerStudentForm').addEventListener('submit', handleRegisterStudent);
+    document.getElementById('registerTeacherForm').addEventListener('submit', handleRegisterTeacher);
+    document.getElementById('resultForm').addEventListener('submit', handleSaveResult);
+    document.getElementById('addClassForm').addEventListener('submit', handleSaveClass);
+    document.getElementById('muetForm').addEventListener('submit', handleSaveMuet);
+    document.getElementById('resetPasswordForm').addEventListener('submit', handlePasswordReset);
+    document.getElementById('profileForm').addEventListener('submit', handleProfileSave);
+
+    document.getElementById('resultModalOverlay').addEventListener('click', function(e) {
+        if (e.target === this) closeResultModal();
+    });
+    document.getElementById('addClassModalOverlay').addEventListener('click', function(e) {
+        if (e.target === this) closeAddClassModal();
+    });
+    document.getElementById('muetModalOverlay').addEventListener('click', function(e) {
+        if (e.target === this) closeMuetModal();
+    });
+    document.getElementById('resetPasswordModalOverlay').addEventListener('click', function(e) {
+        if (e.target === this) closeResetPasswordModal();
+    });
+    document.getElementById('analysisModalOverlay').addEventListener('click', function(e) {
+        if (e.target === this) closeAnalysisModal();
+    });
+    document.getElementById('globalAnalysisModalOverlay').addEventListener('click', function(e) {
+        if (e.target === this) closeGlobalAnalysisModal();
+    });
+
+    setupPasswordToggle('studentPasswordInput', 'toggleStudentPassword');
+    setupPasswordToggle('teacherPasswordInput', 'toggleTeacherPassword');
+    setupPasswordToggle('resetNewPassword', 'toggleResetPassword');
+
+    loadClassesForRegistration();
+    loadHomeroomClassOptions();
+
+    const userType = sessionStorage.getItem('userType');
+    const userId = sessionStorage.getItem('userId');
+    if (userType && userId) {
+        if (userType === 'student') {
+            document.getElementById('studentNameDisplay').textContent = sessionStorage.getItem('userName');
+            document.getElementById('studentIdDisplay').textContent = `ID: ${userId}`;
+            const userClass = sessionStorage.getItem('userClass');
+            db.collection('students').doc(userId).get().then(doc => {
+                if (doc.exists && doc.data().muetBand) {
+                    document.getElementById('muetDisplay').innerHTML = `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${doc.data().muetBand}</div>`;
+                }
+            });
+            loadStudentResults(userId, userClass);
+            navigateTo('student-results');
+        } else if (userType === 'teacher') {
+            document.getElementById('teacherNameDisplay').textContent = sessionStorage.getItem('userName');
+            loadTeacherClasses();
+            navigateTo('teacher-dashboard');
+        }
+    }
+});
+
+// ==================== AUTHENTICATION ====================
+
+async function handleStudentLogin(event) {
+    event.preventDefault();
+    const studentId = document.getElementById('studentIdInput').value.trim();
+    const password = document.getElementById('studentPasswordInput').value;
+
+    if (!studentId || !password) {
+        showToast('Please fill in all fields', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const doc = await db.collection('students').doc(studentId).get();
+        if (!doc.exists) {
+            showToast('Invalid credentials', 'error');
+            hideLoading();
+            return;
+        }
+        const studentData = doc.data();
+        if (studentData.password !== password) {
+            showToast('Invalid credentials', 'error');
+            hideLoading();
+            return;
+        }
+
+        sessionStorage.setItem('userType', 'student');
+        sessionStorage.setItem('userId', studentId);
+        sessionStorage.setItem('userName', studentData.name);
+        sessionStorage.setItem('userClass', studentData.class);
+
+        document.getElementById('studentNameDisplay').textContent = studentData.name;
+        document.getElementById('studentIdDisplay').textContent = `ID: ${studentId} | Class: ${studentData.class}`;
+
+        const muetBand = studentData.muetBand || null;
+        document.getElementById('muetDisplay').innerHTML = muetBand
+            ? `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${muetBand}</div>`
+            : '';
+
+        await loadStudentResults(studentId, studentData.class);
+        navigateTo('student-results');
+        showToast('Login successful!', 'success');
+    } catch (error) {
+        console.error('Login error:', error);
+        showToast('Login failed. Please try again.', 'error');
+    }
+    hideLoading();
+}
+
+async function handleTeacherLogin(event) {
+    event.preventDefault();
+    const staffId = document.getElementById('teacherStaffInput').value.trim();
+    const password = document.getElementById('teacherPasswordInput').value;
+
+    if (!staffId || !password) {
+        showToast('Please fill in all fields', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const doc = await db.collection('teachers').doc(staffId).get();
+        if (!doc.exists) {
+            showToast('Invalid credentials', 'error');
+            hideLoading();
+            return;
+        }
+        const teacherData = doc.data();
+        if (teacherData.password !== password) {
+            showToast('Invalid credentials', 'error');
+            hideLoading();
+            return;
+        }
+
+        sessionStorage.setItem('userType', 'teacher');
+        sessionStorage.setItem('userId', staffId);
+        sessionStorage.setItem('userName', teacherData.name);
+        sessionStorage.setItem('teacherSubject', teacherData.subject || '');
+        sessionStorage.setItem('teacherRole', teacherData.role || '');
+        if (teacherData.homeroomClass) {
+            sessionStorage.setItem('homeroomClass', teacherData.homeroomClass);
+        }
+
+        document.getElementById('teacherNameDisplay').textContent = teacherData.name;
+        loadTeacherClasses();
+        navigateTo('teacher-dashboard');
+        showToast('Login successful!', 'success');
+    } catch (error) {
+        console.error('Login error:', error);
+        showToast('Login failed. Please try again.', 'error');
+    }
+    hideLoading();
+}
+
+function handleLogout() {
+    sessionStorage.clear();
+    navigateTo('main');
+    showToast('Logged out successfully', 'info');
+}
+
+// ==================== PASSWORD RESET ====================
+
+async function handlePasswordReset(event) {
+    event.preventDefault();
+    const userType = document.getElementById('resetUserType').value;
+    const userId = document.getElementById('resetUserId').value.trim();
+    const fullName = document.getElementById('resetFullName').value.trim();
+    const newPassword = document.getElementById('resetNewPassword').value;
+
+    if (!userId || !fullName || !newPassword) {
+        showToast('Please fill in all fields', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const collectionName = userType === 'student' ? 'students' : 'teachers';
+        const docRef = db.collection(collectionName).doc(userId);
+        const doc = await docRef.get();
+
+        if (!doc.exists) {
+            showToast('No account found with this ID', 'error');
+            hideLoading();
+            return;
+        }
+
+        const data = doc.data();
+        if (data.name.toLowerCase() !== fullName.toLowerCase()) {
+            showToast('The name does not match our records', 'error');
+            hideLoading();
+            return;
+        }
+
+        await docRef.update({ password: newPassword });
+        showToast('Password reset successfully!', 'success');
+        closeResetPasswordModal();
+    } catch (error) {
+        console.error('Password reset error:', error);
+        showToast('Reset failed. Try again.', 'error');
+    }
+    hideLoading();
+}
+
+// ==================== STUDENT RESULTS (WITH OVERALL RANK) ====================
+
+async function loadStudentResults(studentId, className) {
+    const contentDiv = document.getElementById('studentResultsContent');
+    contentDiv.innerHTML = '<p class="text-center text-light">Loading results...</p>';
+
+    try {
+        const ownSnap = await db.collection('results').where('studentId', '==', studentId).get();
+        if (ownSnap.empty) {
+            contentDiv.innerHTML = '<p class="text-center text-light">No results found.</p>';
+            document.getElementById('muetDisplay').innerHTML = '';
+            return;
+        }
+
+        const grouped = {};
+        ownSnap.forEach(doc => {
+            const r = doc.data();
+            if (!grouped[r.term]) grouped[r.term] = [];
+            grouped[r.term].push(r);
+        });
+
+        let html = '';
+        let overallNgpTotal = 0;
+        let overallCount = 0;
+
+        for (const [term, results] of Object.entries(grouped)) {
+            let termNgpTotal = 0;
+            html += `
+            <div class="mb-24">
+                <h3 class="term-heading">${term}</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Subject</th><th>Percentage (%)</th><th>Grade</th><th>NGP</th></tr></thead>
+                        <tbody>`;
+            results.forEach(r => {
+                const grade = getGrade(r.marks);
+                const ngp = getNGP(r.marks);
+                termNgpTotal += ngp;
+                overallNgpTotal += ngp;
+                overallCount += 1;
+                html += `<tr>
+                    <td>${r.subject}</td>
+                    <td>${r.marks}</td>
+                    <td><span class="badge badge-${grade.toLowerCase().replace(/[^a-z]/g, '')}">${grade}</span></td>
+                    <td>${ngp.toFixed(2)}</td>
+                </tr>`;
+            });
+            const termAvgNgp = results.length ? (termNgpTotal / results.length).toFixed(2) : '0.00';
+            html += `</tbody></table></div>
+                <p class="fw-700 mt-8">Term Average NGP: ${termAvgNgp}</p>
+            </div>`;
+        }
+
+        let ownAvgNgp = 0;
+        if (overallCount > 0) {
+            ownAvgNgp = overallNgpTotal / overallCount;
+            html += `<div class="result-summary"><strong>Overall Average NGP: ${ownAvgNgp.toFixed(2)}</strong></div>`;
+        }
+
+        // Class ranking
+        if (className) {
+            try {
+                const classResultsSnap = await db.collection('results').where('className', '==', className).get();
+                const studentNgpMap = {};
+                classResultsSnap.forEach(doc => {
+                    const r = doc.data();
+                    if (!studentNgpMap[r.studentId]) studentNgpMap[r.studentId] = { totalNgp: 0, count: 0 };
+                    studentNgpMap[r.studentId].totalNgp += getNGP(r.marks);
+                    studentNgpMap[r.studentId].count += 1;
+                });
+
+                const averages = Object.entries(studentNgpMap).map(([id, data]) => ({
+                    studentId: id,
+                    avgNgp: data.totalNgp / data.count
+                }));
+                averages.sort((a, b) => b.avgNgp - a.avgNgp);
+
+                let classPosition = 'N/A';
+                if (averages.length > 0) {
+                    let rank = 1;
+                    let prevAvg = averages[0].avgNgp;
+                    for (let i = 0; i < averages.length; i++) {
+                        if (averages[i].avgNgp < prevAvg) {
+                            rank = i + 1;
+                            prevAvg = averages[i].avgNgp;
+                        }
+                        if (averages[i].studentId === studentId) {
+                            classPosition = rank;
+                            break;
+                        }
+                    }
+                }
+
+                let status = '';
+                if (ownAvgNgp >= 3.67) status = 'Excellent';
+                else if (ownAvgNgp >= 3.00) status = 'Good';
+                else if (ownAvgNgp >= 2.00) status = 'Satisfactory';
+                else status = 'Needs Improvement';
+
+                html += `
+                <div class="status-container mt-12">
+                    <div class="status-badge green">
+                        <strong>🏅 Class Position: ${classPosition}</strong> (based on NGP)
                     </div>
-                    <div id="profileStudentFields" style="display: none;">
-                        <div class="form-group">
-                            <label for="profileClass">Class (cannot be changed)</label>
-                            <select id="profileClass" required>
-                                <option value="">-- Select Class --</option>
-                            </select>
-                        </div>
+                    <div class="status-badge blue">
+                        <strong>📊 Academic Status: ${status}</strong>
                     </div>
-                    <div id="profileTeacherFields" style="display: none;">
-                        <div class="form-group">
-                            <label for="profileRole">Role</label>
-                            <select id="profileRole" required onchange="toggleProfileHomeroomClass()">
-                                <option value="">-- Select Role --</option>
-                                <option value="Exam Secretary Admin">Exam Secretary Admin</option>
-                                <option value="Regular Teacher">Regular Teacher</option>
-                                <option value="Homeroom Teacher">Homeroom Teacher</option>
-                            </select>
-                        </div>
-                        <div class="form-group" id="profileHomeroomClassGroup" style="display: none;">
-                            <label for="profileHomeroomClass">Assigned Class</label>
-                            <select id="profileHomeroomClass">
-                                <option value="">-- Select Class --</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="profileSubject">Subject</label>
-                            <select id="profileSubject" required>
-                                <option value="">-- Select Subject --</option>
-                                <option value="Pengajian Am">Pengajian Am</option>
-                                <option value="Sejarah">Sejarah</option>
-                                <option value="Bahasa Melayu">Bahasa Melayu</option>
-                                <option value="Geografi">Geografi</option>
-                                <option value="KMK">KMK</option>
-                                <option value="Seni Visual">Seni Visual</option>
-                                <option value="ICT">ICT</option>
-                                <option value="Ekonomi">Ekonomi</option>
-                                <option value="None">None</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="profileNewPassword">New Password (leave blank to keep current)</label>
-                        <input type="password" id="profileNewPassword" placeholder="New password" minlength="6">
-                    </div>
-                    <button type="submit" class="btn btn-primary" id="profileSaveBtn">💾 Save Changes</button>
-                </form>
-            </div>
-        </div>
+                </div>`;
+            } catch (err) {
+                console.error('Class ranking error:', err);
+                html += '<p class="text-light">Could not calculate class ranking.</p>';
+            }
+        }
 
-    </div>
+        // Overall school ranking
+        try {
+            const allResultsSnap = await db.collection('results').get();
+            const allStudentNgpMap = {};
+            allResultsSnap.forEach(doc => {
+                const r = doc.data();
+                if (!allStudentNgpMap[r.studentId]) allStudentNgpMap[r.studentId] = { totalNgp: 0, count: 0 };
+                allStudentNgpMap[r.studentId].totalNgp += getNGP(r.marks);
+                allStudentNgpMap[r.studentId].count += 1;
+            });
 
-    <!-- ==================== MODAL: Add/Edit Result ==================== -->
-    <div class="modal-overlay" id="resultModalOverlay">
-        <div class="modal" id="resultModal">
-            <button class="modal-close" onclick="closeResultModal()">✕</button>
-            <h3 id="resultModalTitle">Add / Edit Result</h3>
-            <form id="resultForm" onsubmit="return false;">
-                <input type="hidden" id="resultStudentId">
-                <input type="hidden" id="resultClassName">
-                <div class="form-group">
-                    <label for="resultSubject">Subject</label>
-                    <select id="resultSubject" required>
-                        <option value="">-- Select Subject --</option>
-                        <option value="Pengajian Am">Pengajian Am</option>
-                        <option value="Sejarah">Sejarah</option>
-                        <option value="Bahasa Melayu">Bahasa Melayu</option>
-                        <option value="Geografi">Geografi</option>
-                        <option value="KMK">KMK</option>
-                        <option value="Seni Visual">Seni Visual</option>
-                        <option value="ICT">ICT</option>
-                        <option value="Ekonomi">Ekonomi</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="resultTerm">Term</label>
-                    <select id="resultTerm" required>
-                        <option value="">-- Select Term --</option>
-                        <option value="Sem 1">Sem 1</option>
-                        <option value="Pertengahan Sem 1">Pertengahan Sem 1</option>
-                        <option value="Percubaan Sem 1">Percubaan Sem 1</option>
-                        <option value="Sem 2">Sem 2</option>
-                        <option value="Pertengahan Sem 2">Pertengahan Sem 2</option>
-                        <option value="Percubaan Sem 2">Percubaan Sem 2</option>
-                        <option value="Sem 3">Sem 3</option>
-                        <option value="Pertengahan Sem 3">Pertengahan Sem 3</option>
-                        <option value="Percubaan Sem 3">Percubaan Sem 3</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="resultMarks">Marks (0-100)</label>
-                    <input type="number" id="resultMarks" placeholder="Enter marks" min="0" max="100" required>
-                </div>
-                <button type="submit" class="btn btn-primary">💾 Save Result</button>
-            </form>
-            <div class="section-divider mt-20">
-                <h4 class="mb-8">Existing Results</h4>
-                <div id="existingResultsList" class="scrollable-list">
-                    <p class="text-light small-text">No results yet.</p>
-                </div>
-            </div>
-        </div>
-    </div>
+            const allAverages = Object.entries(allStudentNgpMap).map(([id, data]) => ({
+                studentId: id,
+                avgNgp: data.totalNgp / data.count
+            }));
+            allAverages.sort((a, b) => b.avgNgp - a.avgNgp);
 
-    <!-- ==================== MODAL: Add/Edit Class ==================== -->
-    <div class="modal-overlay" id="addClassModalOverlay">
-        <div class="modal" id="addClassModal">
-            <button class="modal-close" onclick="closeAddClassModal()">✕</button>
-            <h3 id="addClassModalTitle">Add New Class</h3>
-            <form id="addClassForm" onsubmit="return false;">
-                <input type="hidden" id="classEditMode" value="false">
-                <input type="hidden" id="originalClassName" value="">
-                <div class="form-group">
-                    <label for="newClassName">Class Name</label>
-                    <input type="text" id="newClassName" placeholder="e.g. U6 Geografi" required>
-                </div>
-                <div class="form-group">
-                    <label for="homeroomTeacherInput">Homeroom Teacher</label>
-                    <input type="text" id="homeroomTeacherInput" placeholder="e.g. Cikgu Ahmad" required>
-                </div>
-                <button type="submit" class="btn btn-accent" id="saveClassBtn">➕ Create Class</button>
-            </form>
-        </div>
-    </div>
+            let overallPosition = 'N/A';
+            let totalRanked = allAverages.length;
+            if (allAverages.length > 0) {
+                let rank = 1;
+                let prevAvg = allAverages[0].avgNgp;
+                for (let i = 0; i < allAverages.length; i++) {
+                    if (allAverages[i].avgNgp < prevAvg) {
+                        rank = i + 1;
+                        prevAvg = allAverages[i].avgNgp;
+                    }
+                    if (allAverages[i].studentId === studentId) {
+                        overallPosition = rank;
+                        break;
+                    }
+                }
+            }
 
-    <!-- ==================== MODAL: Set MUET Result ==================== -->
-    <div class="modal-overlay" id="muetModalOverlay">
-        <div class="modal" id="muetModal">
-            <button class="modal-close" onclick="closeMuetModal()">✕</button>
-            <h3>Set MUET Result</h3>
-            <form id="muetForm" onsubmit="return false;">
-                <input type="hidden" id="muetStudentId">
-                <input type="hidden" id="muetClassName">
-                <div class="form-group">
-                    <label for="muetBand">MUET Band</label>
-                    <select id="muetBand" required>
-                        <option value="">-- Select Band --</option>
-                        <option value="Band 1.0">Band 1</option>
-                        <option value="Band 1.5">Band 1.5</option>
-                        <option value="Band 2.0">Band 2</option>
-                        <option value="Band 2.5">Band 2.5</option>
-                        <option value="Band 3.0">Band 3</option>
-                        <option value="Band 3.5">Band 3.5</option>
-                        <option value="Band 4.0">Band 4</option>
-                        <option value="Band 4.5">Band 4.5</option>
-                        <option value="Band 5.0">Band 5</option>
-                    </select>
+            html += `
+            <div class="status-container mt-12">
+                <div class="status-badge green" style="border-color: #f59e0b; color: #fbbf24;">
+                    <strong>🌍 Overall School Rank: ${overallPosition}</strong> out of ${totalRanked} students
                 </div>
-                <button type="submit" class="btn btn-primary">💾 Save MUET</button>
-            </form>
-        </div>
-    </div>
+            </div>`;
+        } catch (err) {
+            console.error('Overall ranking error:', err);
+            html += '<p class="text-light">Could not calculate overall school rank.</p>';
+        }
 
-    <!-- ==================== MODAL: Reset Password ==================== -->
-    <div class="modal-overlay" id="resetPasswordModalOverlay">
-        <div class="modal" id="resetPasswordModal">
-            <button class="modal-close" onclick="closeResetPasswordModal()">✕</button>
-            <h3>Reset Password</h3>
-            <form id="resetPasswordForm" onsubmit="return false;">
-                <input type="hidden" id="resetUserType" value="">
-                <div class="form-group">
-                    <label id="resetIdLabel">ID / Staff Number</label>
-                    <input type="text" id="resetUserId" placeholder="Enter your ID" required autocomplete="off">
-                </div>
-                <div class="form-group">
-                    <label for="resetFullName">Full Name</label>
-                    <input type="text" id="resetFullName" placeholder="Enter your full name" required>
-                </div>
-                <div class="form-group">
-                    <label for="resetNewPassword">New Password</label>
-                    <div class="password-wrapper">
-                        <input type="password" id="resetNewPassword" placeholder="Create new password" required minlength="6">
-                        <button type="button" class="toggle-password" id="toggleResetPassword">👁️</button>
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-primary">🔐 Reset Password</button>
-            </form>
-        </div>
-    </div>
+        contentDiv.innerHTML = html;
 
-    <!-- ==================== MODAL: Exam Analysis (per class) ==================== -->
-    <div class="modal-overlay" id="analysisModalOverlay">
-        <div class="modal" id="analysisModal" style="max-width: 700px;">
-            <div class="modal-header-actions" style="display: flex; gap: 8px; position: absolute; top: 12px; right: 16px;">
-                <button class="btn btn-sm btn-outline btn-auto" onclick="printAnalysisWithInfo()">🖨️ Print</button>
-                <button class="modal-close" onclick="closeAnalysisModal()">✕</button>
-            </div>
-            <h3 id="analysisModalTitle">📊 Class Exam Analysis</h3>
-            <div class="form-group" id="analysisTermFilterGroup">
-                <label for="analysisTermFilter">Filter by Term</label>
-                <select id="analysisTermFilter" onchange="runAnalysis()">
-                    <option value="">All Terms</option>
-                    <option value="Sem 1">Sem 1</option>
-                    <option value="Pertengahan Sem 1">Pertengahan Sem 1</option>
-                    <option value="Percubaan Sem 1">Percubaan Sem 1</option>
-                    <option value="Sem 2">Sem 2</option>
-                    <option value="Pertengahan Sem 2">Pertengahan Sem 2</option>
-                    <option value="Percubaan Sem 2">Percubaan Sem 2</option>
-                    <option value="Sem 3">Sem 3</option>
-                    <option value="Pertengahan Sem 3">Pertengahan Sem 3</option>
-                    <option value="Percubaan Sem 3">Percubaan Sem 3</option>
-                </select>
-            </div>
-            <div id="analysisPrintArea">
-                <div id="analysisContent">
-                    <p class="text-center text-light">Select a class and click "Analysis" to load data.</p>
-                </div>
-            </div>
-        </div>
-    </div>
+        const stuDoc = await db.collection('students').doc(studentId).get();
+        const muetBand = stuDoc.exists ? stuDoc.data().muetBand || null : null;
+        document.getElementById('muetDisplay').innerHTML = muetBand
+            ? `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${muetBand}</div>`
+            : '';
+    } catch (error) {
+        console.error('Error loading results:', error);
+        contentDiv.innerHTML = '<p class="text-center error-text">Error loading results.</p>';
+    }
+}
 
-    <!-- ==================== MODAL: Global Exam Analysis ==================== -->
-    <div class="modal-overlay" id="globalAnalysisModalOverlay">
-        <div class="modal" id="globalAnalysisModal" style="max-width: 700px;">
-            <div class="modal-header-actions" style="display: flex; gap: 8px; position: absolute; top: 12px; right: 16px;">
-                <button class="btn btn-sm btn-outline btn-auto" onclick="printGlobalAnalysisWithInfo()">🖨️ Print</button>
-                <button class="modal-close" onclick="closeGlobalAnalysisModal()">✕</button>
-            </div>
-            <h3>📊 Exam Analysis</h3>
-            <div class="form-group">
-                <label for="globalAnalysisClass">Class</label>
-                <select id="globalAnalysisClass" onchange="runGlobalAnalysis()">
-                    <option value="__all__">All Classes</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="globalAnalysisTerm">Term</label>
-                <select id="globalAnalysisTerm" onchange="runGlobalAnalysis()">
-                    <option value="">All Terms</option>
-                    <option value="Sem 1">Sem 1</option>
-                    <option value="Pertengahan Sem 1">Pertengahan Sem 1</option>
-                    <option value="Percubaan Sem 1">Percubaan Sem 1</option>
-                    <option value="Sem 2">Sem 2</option>
-                    <option value="Pertengahan Sem 2">Pertengahan Sem 2</option>
-                    <option value="Percubaan Sem 2">Percubaan Sem 2</option>
-                    <option value="Sem 3">Sem 3</option>
-                    <option value="Pertengahan Sem 3">Pertengahan Sem 3</option>
-                    <option value="Percubaan Sem 3">Percubaan Sem 3</option>
-                </select>
-            </div>
-            <div id="globalAnalysisPrintArea">
-                <div id="globalAnalysisContent">
-                    <p class="text-center text-light">Select filters to view analysis.</p>
-                </div>
-            </div>
-        </div>
-    </div>
+// ==================== TEACHER CLASSES & STUDENTS ====================
 
-    <!-- External JavaScript -->
-    <script src="app.js"></script>
-</body>
-</html>
+async function loadTeacherClasses() {
+    const contentDiv = document.getElementById('classListContent');
+    contentDiv.innerHTML = '<p class="text-center text-light">Loading classes...</p>';
+    try {
+        const snapshot = await db.collection('classes').get();
+        if (snapshot.empty) {
+            contentDiv.innerHTML = '<p class="text-center text-light">No classes found. Create your first class below.</p>';
+            return;
+        }
+        let html = '<div class="class-list-grid">';
+        snapshot.forEach(doc => {
+            const className = doc.id;
+            const data = doc.data();
+            const homeroom = data.homeroomTeacher || 'N/A';
+            html += `
+            <div class="class-item">
+                <button class="btn btn-outline class-btn" onclick="selectClass('${className}')">
+                    <span class="class-name">${className}</span>
+                    <small class="homeroom">${homeroom}</small>
+                </button>
+                <div class="class-actions">
+                    <button class="btn btn-xs btn-primary" onclick="event.stopPropagation(); showEditClassModal('${className}', '${homeroom}')">✏️ Edit</button>
+                    <button class="btn btn-xs btn-danger" onclick="event.stopPropagation(); deleteClass('${className}')">🗑️ Delete</button>
+                </div>
+            </div>`;
+        });
+        html += '</div>';
+        contentDiv.innerHTML = html;
+    } catch (error) {
+        console.error('Error loading classes:', error);
+        contentDiv.innerHTML = '<p class="text-center error-text">Error loading classes.</p>';
+    }
+}
+
+function selectClass(className) {
+    sessionStorage.setItem('currentClass', className);
+    document.getElementById('currentClassName').textContent = className;
+    document.getElementById('classNameInline').textContent = className;
+    loadClassStudents(className);
+    navigateTo('teacher-class');
+}
+
+async function loadClassStudents(className) {
+    const contentDiv = document.getElementById('classStudentsContent');
+    contentDiv.innerHTML = '<p class="text-center text-light">Loading students...</p>';
+    try {
+        const snapshot = await db.collection('students').where('class', '==', className).get();
+        if (snapshot.empty) {
+            contentDiv.innerHTML = '<p class="text-center text-light">No students in this class.</p>';
+            return;
+        }
+
+        const studentsArray = [];
+        snapshot.forEach(doc => studentsArray.push({ id: doc.id, ...doc.data() }));
+        studentsArray.sort((a, b) => a.name.localeCompare(b.name));
+
+        let html = `
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Student ID</th><th>Name</th><th>Actions</th></tr></thead>
+                <tbody>`;
+        studentsArray.forEach(student => {
+            html += `<tr>
+                <td>${student.id}</td>
+                <td>${student.name}</td>
+                <td>
+                    <button class="btn btn-xs btn-primary" onclick="showResultModal('${student.id}', '${student.name}', '${className}')">📝 Results</button>
+                    <button class="btn btn-xs btn-accent" onclick="showMuetModal('${student.id}', '${className}')">🎤 MUET</button>
+                    <button class="btn btn-xs btn-danger" onclick="deleteStudent('${student.id}', '${className}')">🗑️ Delete</button>
+                </td>
+            </tr>`;
+        });
+        html += '</tbody></table></div>';
+        contentDiv.innerHTML = html;
+    } catch (error) {
+        console.error('Error loading students:', error);
+        contentDiv.innerHTML = '<p class="text-center error-text">Error loading students.</p>';
+    }
+}
+
+// ==================== RESULT MANAGEMENT (TEACHER) ====================
+
+function showResultModal(studentId, studentName, className) {
+    document.getElementById('resultStudentId').value = studentId;
+    document.getElementById('resultClassName').value = className;
+    document.getElementById('resultModalTitle').textContent = `Add / Edit Result for ${studentName}`;
+
+    const teacherSubject = sessionStorage.getItem('teacherSubject');
+    const subjectSelect = document.getElementById('resultSubject');
+    if (teacherSubject && teacherSubject !== 'None') {
+        subjectSelect.value = teacherSubject;
+        subjectSelect.disabled = true;
+        for (let opt of subjectSelect.options) {
+            if (opt.value !== teacherSubject && opt.value !== '') opt.style.display = 'none';
+        }
+    } else {
+        subjectSelect.disabled = false;
+        for (let opt of subjectSelect.options) opt.style.display = '';
+    }
+
+    loadExistingResults(studentId);
+    document.getElementById('resultModalOverlay').classList.add('active');
+}
+
+function closeResultModal() {
+    document.getElementById('resultModalOverlay').classList.remove('active');
+    document.getElementById('resultForm').reset();
+    const subjectSelect = document.getElementById('resultSubject');
+    subjectSelect.disabled = false;
+    for (let opt of subjectSelect.options) opt.style.display = '';
+}
+
+async function loadExistingResults(studentId) {
+    const listDiv = document.getElementById('existingResultsList');
+    listDiv.innerHTML = '<p class="text-light small-text">Loading...</p>';
+
+    const teacherSubject = sessionStorage.getItem('teacherSubject');
+    if (!teacherSubject || teacherSubject === 'None') {
+        listDiv.innerHTML = '<p class="text-light small-text">No subject assigned to you.</p>';
+        return;
+    }
+
+    try {
+        const snapshot = await db.collection('results')
+            .where('studentId', '==', studentId)
+            .where('subject', '==', teacherSubject)
+            .get();
+
+        if (snapshot.empty) {
+            listDiv.innerHTML = '<p class="text-light small-text">No results yet for your subject.</p>';
+            return;
+        }
+        let html = '';
+        snapshot.forEach(doc => {
+            const r = doc.data();
+            const grade = getGrade(r.marks);
+            html += `
+            <div class="existing-result-item">
+                <strong>${r.subject}</strong> - ${r.term}: ${r.marks}/100 
+                <span class="badge badge-${grade.toLowerCase().replace(/[^a-z]/g, '')}">${grade}</span>
+                <button class="btn btn-xs btn-danger delete-btn" onclick="deleteResult('${doc.id}')">Delete</button>
+            </div>`;
+        });
+        listDiv.innerHTML = html;
+    } catch (error) {
+        console.error('Error loading existing results:', error);
+        listDiv.innerHTML = '<p class="error-text small-text">Error loading results.</p>';
+    }
+}
+
+async function handleSaveResult(event) {
+    event.preventDefault();
+    const studentId = document.getElementById('resultStudentId').value;
+    const className = document.getElementById('resultClassName').value;
+    const subject = document.getElementById('resultSubject').value.trim();
+    const term = document.getElementById('resultTerm').value;
+    const marks = parseInt(document.getElementById('resultMarks').value);
+
+    const teacherSubject = sessionStorage.getItem('teacherSubject');
+    if (teacherSubject && teacherSubject !== 'None' && subject !== teacherSubject) {
+        showToast('You can only enter results for your assigned subject.', 'error');
+        return;
+    }
+
+    if (!subject || !term || isNaN(marks)) {
+        showToast('Please fill in all fields', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const existingSnapshot = await db.collection('results')
+            .where('studentId', '==', studentId)
+            .where('subject', '==', subject)
+            .where('term', '==', term)
+            .limit(1)
+            .get();
+
+        if (!existingSnapshot.empty) {
+            const docId = existingSnapshot.docs[0].id;
+            await db.collection('results').doc(docId).update({
+                marks: marks,
+                updatedAt: new Date().toISOString()
+            });
+            showToast('Result updated successfully!', 'success');
+        } else {
+            await db.collection('results').add({
+                studentId: studentId,
+                className: className,
+                subject: subject,
+                term: term,
+                marks: marks,
+                createdAt: new Date().toISOString()
+            });
+            showToast('Result added successfully!', 'success');
+        }
+        document.getElementById('resultForm').reset();
+        loadExistingResults(studentId);
+    } catch (error) {
+        console.error('Error saving result:', error);
+        showToast('Failed to save result. A Firestore composite index may be required for: studentId, subject, term.', 'error');
+    }
+    hideLoading();
+}
+
+async function deleteResult(resultId) {
+    if (!confirm('Are you sure you want to delete this result?')) return;
+    showLoading();
+    try {
+        await db.collection('results').doc(resultId).delete();
+        const studentId = document.getElementById('resultStudentId').value;
+        loadExistingResults(studentId);
+        showToast('Result deleted successfully!', 'success');
+    } catch (error) {
+        console.error('Error deleting result:', error);
+        showToast('Failed to delete result.', 'error');
+    }
+    hideLoading();
+}
+
+async function deleteStudent(studentId, className) {
+    if (!confirm(`Are you sure you want to permanently delete student "${studentId}"? This will remove their account and all associated results.`)) return;
+    showLoading();
+    try {
+        await db.collection('students').doc(studentId).delete();
+        const resultsSnap = await db.collection('results').where('studentId', '==', studentId).get();
+        const batch = db.batch();
+        resultsSnap.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        showToast('Student deleted successfully!', 'success');
+        loadClassStudents(className);
+    } catch (error) {
+        console.error('Error deleting student:', error);
+        showToast('Failed to delete student.', 'error');
+    }
+    hideLoading();
+}
+
+// ==================== MUET MANAGEMENT ====================
+
+function showMuetModal(studentId, className) {
+    document.getElementById('muetStudentId').value = studentId;
+    document.getElementById('muetClassName').value = className;
+    document.getElementById('muetModalOverlay').classList.add('active');
+}
+
+function closeMuetModal() {
+    document.getElementById('muetModalOverlay').classList.remove('active');
+    document.getElementById('muetForm').reset();
+}
+
+async function handleSaveMuet(event) {
+    event.preventDefault();
+    const studentId = document.getElementById('muetStudentId').value;
+    const band = document.getElementById('muetBand').value;
+
+    if (!band) {
+        showToast('Please select a band', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        await db.collection('students').doc(studentId).update({ muetBand: band });
+        showToast('MUET result saved!', 'success');
+        closeMuetModal();
+    } catch (error) {
+        console.error('Error saving MUET:', error);
+        showToast('Failed to save MUET result.', 'error');
+    }
+    hideLoading();
+}
+
+// ==================== PER‑CLASS ANALYSIS (inside a class) ====================
+
+function openAnalysisModal() {
+    const className = sessionStorage.getItem('currentClass');
+    if (!className) {
+        showToast('No class selected', 'error');
+        return;
+    }
+    document.getElementById('analysisModalTitle').textContent = `📊 Analysis for ${className}`;
+    document.getElementById('analysisModalOverlay').classList.add('active');
+    runAnalysis();
+}
+
+function closeAnalysisModal() {
+    document.getElementById('analysisModalOverlay').classList.remove('active');
+}
+
+async function runAnalysis() {
+    const className = sessionStorage.getItem('currentClass');
+    const selectedTerm = document.getElementById('analysisTermFilter').value;
+    const contentDiv = document.getElementById('analysisContent');
+
+    const role = sessionStorage.getItem('teacherRole');
+    const teacherSubject = sessionStorage.getItem('teacherSubject');
+
+    contentDiv.innerHTML = '<p class="text-center text-light">Loading analysis...</p>';
+
+    if (role === 'Regular Teacher' && (!teacherSubject || teacherSubject === 'None')) {
+        contentDiv.innerHTML = '<p class="text-center text-light">No subject assigned to you. Contact admin.</p>';
+        return;
+    }
+
+    try {
+        const studentsSnap = await db.collection('students').where('class', '==', className).get();
+        if (studentsSnap.empty) {
+            contentDiv.innerHTML = '<p class="text-center text-light">No students in this class.</p>';
+            return;
+        }
+        const students = [];
+        studentsSnap.forEach(doc => students.push({ id: doc.id, name: doc.data().name }));
+
+        let resultsQuery = db.collection('results').where('className', '==', className);
+        if (role === 'Regular Teacher' && teacherSubject && teacherSubject !== 'None') {
+            resultsQuery = resultsQuery.where('subject', '==', teacherSubject);
+        }
+
+        const resultsSnap = await resultsQuery.get();
+        const allResults = [];
+        resultsSnap.forEach(doc => allResults.push({ id: doc.id, ...doc.data() }));
+
+        const filteredResults = selectedTerm
+            ? allResults.filter(r => r.term === selectedTerm)
+            : allResults;
+
+        if (filteredResults.length === 0) {
+            contentDiv.innerHTML = `<p class="text-center text-light">No results found for ${selectedTerm || 'any term'}.</p>`;
+            return;
+        }
+
+        const studentGrades = {};
+        const subjectStats = {};
+
+        filteredResults.forEach(r => {
+            if (!studentGrades[r.studentId]) studentGrades[r.studentId] = { totalNgp: 0, count: 0 };
+            studentGrades[r.studentId].totalNgp += getNGP(r.marks);
+            studentGrades[r.studentId].count += 1;
+
+            if (!subjectStats[r.subject]) subjectStats[r.subject] = { marks: [], grades: [] };
+            subjectStats[r.subject].marks.push(r.marks);
+            subjectStats[r.subject].grades.push(getGrade(r.marks));
+        });
+
+        let heading = '📘 Subject Performance';
+        if (role === 'Regular Teacher' && teacherSubject) heading += ` (Subject: ${teacherSubject})`;
+
+        let html = `<h4 class="mb-12">${heading}</h4>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Subject</th><th>Entries</th><th>Average Mark</th><th>Highest</th><th>Lowest</th><th>Grade Distribution</th></tr></thead>
+                <tbody>`;
+
+        for (const [subject, data] of Object.entries(subjectStats)) {
+            const marks = data.marks;
+            const avg = (marks.reduce((a,b) => a+b, 0) / marks.length).toFixed(1);
+            const max = Math.max(...marks);
+            const min = Math.min(...marks);
+
+            const gradeCounts = {};
+            data.grades.forEach(g => gradeCounts[g] = (gradeCounts[g] || 0) + 1);
+            const gradeDist = Object.entries(gradeCounts)
+                .sort((a,b) => b[1] - a[1])
+                .map(([g, c]) => `${g}:${c}`)
+                .join(', ');
+
+            html += `<tr><td><strong>${subject}</strong></td><td>${marks.length}</td><td>${avg}%</td><td>${max}%</td><td>${min}%</td><td><small>${gradeDist}</small></td></tr>`;
+        }
+        html += `</tbody></table></div>`;
+
+        const classNgpValues = Object.values(studentGrades).map(s => s.totalNgp / s.count);
+        const overallAvgNgp = classNgpValues.length
+            ? (classNgpValues.reduce((a,b) => a+b, 0) / classNgpValues.length).toFixed(2)
+            : '0.00';
+
+        const studentNgpList = students.map(s => {
+            const grades = studentGrades[s.id] || { totalNgp: 0, count: 0 };
+            const avgNgp = grades.count > 0 ? (grades.totalNgp / grades.count) : 0;
+            return { id: s.id, name: s.name, avgNgp };
+        }).sort((a,b) => b.avgNgp - a.avgNgp);
+
+        const top = studentNgpList.filter(s => s.avgNgp > 0).slice(0, 3);
+        const bottom = studentNgpList.filter(s => s.avgNgp > 0).slice(-3).reverse();
+
+        html += `<h4 class="mt-20 mb-12">🏅 Overall Class Statistics</h4>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+                <tbody>
+                    <tr><td>Students with results</td><td>${classNgpValues.length} / ${students.length}</td></tr>
+                    <tr><td>Overall Average NGP</td><td><strong>${overallAvgNgp}</strong></td></tr>
+                    <tr><td>Top Performers</td><td>${top.map(s => `${s.name} (${s.avgNgp.toFixed(2)})`).join('<br>') || 'N/A'}</td></tr>
+                    <tr><td>Needs Support</td><td>${bottom.map(s => `${s.name} (${s.avgNgp.toFixed(2)})`).join('<br>') || 'N/A'}</td></tr>
+                </tbody>
+            </table>
+        </div>`;
+
+        contentDiv.innerHTML = html;
+    } catch (error) {
+        console.error('Analysis error:', error);
+        contentDiv.innerHTML = '<p class="error-text">Error loading analysis. Check console.</p>';
+    }
+}
+
+function printAnalysisWithInfo() {
+    const className = sessionStorage.getItem('currentClass') || 'Unknown';
+    const term = document.getElementById('analysisTermFilter').value || 'All Terms';
+    const subtitle = `Class: ${className} | Term: ${term}`;
+    printContent('analysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', subtitle);
+}
+
+// ==================== GLOBAL ANALYSIS MODAL (from dashboard) ====================
+
+async function openGlobalAnalysisModal() {
+    const role = sessionStorage.getItem('teacherRole');
+    const homeroomClass = sessionStorage.getItem('homeroomClass');
+
+    const classSelect = document.getElementById('globalAnalysisClass');
+    const snapshot = await db.collection('classes').get();
+    classSelect.innerHTML = '<option value="__all__">All Classes</option>';
+    snapshot.forEach(doc => {
+        const option = document.createElement('option');
+        option.value = doc.id;
+        option.textContent = doc.id;
+        classSelect.appendChild(option);
+    });
+
+    if (role === 'Homeroom Teacher' && homeroomClass) {
+        classSelect.value = homeroomClass;
+    } else {
+        classSelect.value = '__all__';
+    }
+
+    document.getElementById('globalAnalysisTerm').value = '';
+    document.getElementById('globalAnalysisModalOverlay').classList.add('active');
+    runGlobalAnalysis();
+}
+
+function closeGlobalAnalysisModal() {
+    document.getElementById('globalAnalysisModalOverlay').classList.remove('active');
+}
+
+async function runGlobalAnalysis() {
+    const classSelect = document.getElementById('globalAnalysisClass');
+    const selectedClass = classSelect.value;
+    const selectedTerm = document.getElementById('globalAnalysisTerm').value;
+    const contentDiv = document.getElementById('globalAnalysisContent');
+
+    const role = sessionStorage.getItem('teacherRole');
+    const teacherSubject = sessionStorage.getItem('teacherSubject');
+
+    contentDiv.innerHTML = '<p class="text-center text-light">Loading analysis...</p>';
+
+    if (role === 'Regular Teacher' && (!teacherSubject || teacherSubject === 'None')) {
+        contentDiv.innerHTML = '<p class="text-center text-light">No subject assigned to you. Contact admin.</p>';
+        return;
+    }
+
+    try {
+        let resultsQuery = db.collection('results');
+        if (role === 'Regular Teacher' && teacherSubject && teacherSubject !== 'None') {
+            resultsQuery = resultsQuery.where('subject', '==', teacherSubject);
+        }
+        if (selectedClass !== '__all__') {
+            resultsQuery = resultsQuery.where('className', '==', selectedClass);
+        }
+
+        const resultsSnap = await resultsQuery.get();
+        const allResults = [];
+        resultsSnap.forEach(doc => allResults.push({ id: doc.id, ...doc.data() }));
+
+        const filteredResults = selectedTerm
+            ? allResults.filter(r => r.term === selectedTerm)
+            : allResults;
+
+        if (filteredResults.length === 0) {
+            contentDiv.innerHTML = `<p class="text-center text-light">No results found for the selected filters.</p>`;
+            return;
+        }
+
+        let heading = '📊 Exam Analysis';
+        if (role === 'Regular Teacher' && teacherSubject) heading += ` – Subject: <strong>${teacherSubject}</strong>`;
+        if (selectedClass !== '__all__') heading += ` – Class: <strong>${selectedClass}</strong>`;
+        else heading += ' – <strong>All Classes</strong>';
+        if (selectedTerm) heading += ` – Term: <strong>${selectedTerm}</strong>`;
+
+        const subjectStats = {};
+        filteredResults.forEach(r => {
+            if (!subjectStats[r.subject]) subjectStats[r.subject] = { marks: [], grades: [] };
+            subjectStats[r.subject].marks.push(r.marks);
+            subjectStats[r.subject].grades.push(getGrade(r.marks));
+        });
+
+        let html = `<h4 class="mb-12">${heading}</h4>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Subject</th><th>Entries</th><th>Average Mark</th><th>Highest</th><th>Lowest</th><th>Grade Distribution</th></tr></thead>
+                <tbody>`;
+
+        for (const [subject, data] of Object.entries(subjectStats)) {
+            const marks = data.marks;
+            const avg = (marks.reduce((a,b) => a+b, 0) / marks.length).toFixed(1);
+            const max = Math.max(...marks);
+            const min = Math.min(...marks);
+
+            const gradeCounts = {};
+            data.grades.forEach(g => gradeCounts[g] = (gradeCounts[g] || 0) + 1);
+            const gradeDist = Object.entries(gradeCounts)
+                .sort((a,b) => b[1] - a[1])
+                .map(([g, c]) => `${g}:${c}`)
+                .join(', ');
+
+            html += `<tr><td><strong>${subject}</strong></td><td>${marks.length}</td><td>${avg}%</td><td>${max}%</td><td>${min}%</td><td><small>${gradeDist}</small></td></tr>`;
+        }
+        html += `</tbody></table></div>`;
+
+        const overallNgp = (filteredResults.reduce((sum, r) => sum + getNGP(r.marks), 0) / filteredResults.length).toFixed(2);
+        html += `<div class="mt-12"><strong>Overall Average NGP: ${overallNgp}</strong></div>`;
+
+        contentDiv.innerHTML = html;
+    } catch (error) {
+        console.error('Global analysis error:', error);
+        contentDiv.innerHTML = '<p class="error-text">Error loading analysis.</p>';
+    }
+}
+
+function printGlobalAnalysisWithInfo() {
+    const classSelect = document.getElementById('globalAnalysisClass');
+    const className = classSelect.value === '__all__' ? 'All Classes' : classSelect.value;
+    const term = document.getElementById('globalAnalysisTerm').value || 'All Terms';
+    const subtitle = `Class: ${className} | Term: ${term}`;
+    printContent('globalAnalysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', subtitle);
+}
+
+// ==================== REGISTRATION ====================
+
+async function handleRegisterStudent(event) {
+    event.preventDefault();
+    const name = document.getElementById('regStudentName').value.trim();
+    const studentId = document.getElementById('regStudentId').value.trim();
+    const className = document.getElementById('regStudentClass').value;
+    const password = document.getElementById('regStudentPassword').value;
+
+    if (!name || !studentId || !className || !password) {
+        showToast('Please fill in all fields', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const existingDoc = await db.collection('students').doc(studentId).get();
+        await db.collection('students').doc(studentId).set({
+            name: name,
+            class: className,
+            password: password,
+            createdAt: existingDoc.exists ? existingDoc.data().createdAt : new Date().toISOString()
+        }, { merge: true });
+        showToast(existingDoc.exists ? 'Student updated successfully!' : 'Student registered successfully!', 'success');
+        document.getElementById('registerStudentForm').reset();
+        navigateTo('main');
+    } catch (error) {
+        console.error('Registration error:', error);
+        showToast('Registration failed.', 'error');
+    }
+    hideLoading();
+}
+
+function toggleHomeroomClass() {
+    const role = document.getElementById('regTeacherRole').value;
+    const classGroup = document.getElementById('homeroomClassGroup');
+    const classSelect = document.getElementById('regTeacherHomeroomClass');
+
+    if (role === 'Homeroom Teacher') {
+        classGroup.style.display = 'block';
+        classSelect.required = true;
+        if (classSelect.options.length <= 1) loadHomeroomClassOptions();
+    } else {
+        classGroup.style.display = 'none';
+        classSelect.required = false;
+        classSelect.value = '';
+    }
+}
+
+async function loadHomeroomClassOptions() {
+    const select = document.getElementById('regTeacherHomeroomClass');
+    try {
+        const snapshot = await db.collection('classes').get();
+        select.innerHTML = '<option value="">-- Select Class --</option>';
+        snapshot.forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = doc.id;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading homeroom classes:', error);
+    }
+}
+
+async function handleRegisterTeacher(event) {
+    event.preventDefault();
+    const name = document.getElementById('regTeacherName').value.trim();
+    const staffId = document.getElementById('regTeacherStaff').value.trim();
+    const role = document.getElementById('regTeacherRole').value;
+    const subject = document.getElementById('regTeacherSubject').value;
+    const password = document.getElementById('regTeacherPassword').value;
+
+    let homeroomClass = '';
+    if (role === 'Homeroom Teacher') {
+        homeroomClass = document.getElementById('regTeacherHomeroomClass').value;
+        if (!homeroomClass) {
+            showToast('Please select your assigned class', 'error');
+            return;
+        }
+    }
+
+    if (!name || !staffId || !role || !subject || !password) {
+        showToast('Please fill in all fields', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const existingDoc = await db.collection('teachers').doc(staffId).get();
+        const teacherData = {
+            name: name,
+            role: role,
+            subject: subject,
+            password: password,
+            createdAt: existingDoc.exists ? existingDoc.data().createdAt : new Date().toISOString()
+        };
+        teacherData.homeroomClass = (role === 'Homeroom Teacher') ? homeroomClass : '';
+
+        await db.collection('teachers').doc(staffId).set(teacherData, { merge: true });
+        showToast(existingDoc.exists ? 'Teacher updated successfully!' : 'Teacher registered successfully!', 'success');
+        document.getElementById('registerTeacherForm').reset();
+        document.getElementById('homeroomClassGroup').style.display = 'none';
+        navigateTo('main');
+    } catch (error) {
+        console.error('Registration error:', error);
+        showToast('Registration failed.', 'error');
+    }
+    hideLoading();
+}
+
+// ==================== PROFILE MANAGEMENT ====================
+
+async function openProfile() {
+    const userType = sessionStorage.getItem('userType');
+    const userId = sessionStorage.getItem('userId');
+
+    if (!userType || !userId) {
+        showToast('Session expired. Please log in again.', 'error');
+        return;
+    }
+
+    document.getElementById('profileUserType').value = userType;
+    document.getElementById('profileUserId').value = userId;
+
+    const studentFields = document.getElementById('profileStudentFields');
+    const teacherFields = document.getElementById('profileTeacherFields');
+    if (userType === 'student') {
+        studentFields.style.display = 'block';
+        teacherFields.style.display = 'none';
+    } else {
+        studentFields.style.display = 'none';
+        teacherFields.style.display = 'block';
+    }
+
+    showLoading();
+    try {
+        const collectionName = userType === 'student' ? 'students' : 'teachers';
+        const docSnap = await db.collection(collectionName).doc(userId).get();
+        if (!docSnap.exists) {
+            showToast('User data not found.', 'error');
+            hideLoading();
+            return;
+        }
+        const data = docSnap.data();
+
+        document.getElementById('profileName').value = data.name || '';
+        document.getElementById('profileNewPassword').value = '';
+
+        if (userType === 'student') {
+            const classSelect = document.getElementById('profileClass');
+            await populateClassDropdown(classSelect, data.class);
+            // Student can now change class – dropdown is enabled by default
+        } else {
+            document.getElementById('profileRole').value = data.role || '';
+            document.getElementById('profileSubject').value = data.subject || '';
+
+            const classSelect = document.getElementById('profileHomeroomClass');
+            await populateClassDropdown(classSelect, data.homeroomClass || '');
+            toggleProfileHomeroomClass();
+        }
+
+        navigateTo('profile');
+    } catch (error) {
+        console.error('Error loading profile:', error);
+        showToast('Failed to load profile.', 'error');
+    }
+    hideLoading();
+}
+
+async function populateClassDropdown(selectElement, selectedValue) {
+    try {
+        const snapshot = await db.collection('classes').get();
+        selectElement.innerHTML = '<option value="">-- Select Class --</option>';
+        snapshot.forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = doc.id;
+            selectElement.appendChild(option);
+        });
+        if (selectedValue) selectElement.value = selectedValue;
+    } catch (error) {
+        console.error('Error populating class dropdown:', error);
+    }
+}
+
+function toggleProfileHomeroomClass() {
+    const role = document.getElementById('profileRole').value;
+    const classGroup = document.getElementById('profileHomeroomClassGroup');
+    const classSelect = document.getElementById('profileHomeroomClass');
+    if (role === 'Homeroom Teacher') {
+        classGroup.style.display = 'block';
+        classSelect.required = true;
+    } else {
+        classGroup.style.display = 'none';
+        classSelect.required = false;
+        classSelect.value = '';
+    }
+}
+
+function goBackFromProfile() {
+    const userType = sessionStorage.getItem('userType');
+    if (userType === 'student') {
+        navigateTo('student-results');
+    } else {
+        navigateTo('teacher-dashboard');
+    }
+}
+
+async function handleProfileSave(event) {
+    event.preventDefault();
+
+    const userType = document.getElementById('profileUserType').value;
+    const userId = document.getElementById('profileUserId').value;
+    const name = document.getElementById('profileName').value.trim();
+    const newPassword = document.getElementById('profileNewPassword').value;
+
+    if (!name) {
+        showToast('Name is required.', 'error');
+        return;
+    }
+
+    const updateData = { name: name };
+    if (newPassword) updateData.password = newPassword;
+
+    if (userType === 'student') {
+        // Student can change class
+        const className = document.getElementById('profileClass').value;
+        if (!className) {
+            showToast('Please select a class.', 'error');
+            return;
+        }
+        updateData.class = className;
+    } else {
+        const role = document.getElementById('profileRole').value;
+        const subject = document.getElementById('profileSubject').value;
+        if (!role || !subject) {
+            showToast('Please fill in all teacher fields.', 'error');
+            return;
+        }
+        updateData.role = role;
+        updateData.subject = subject;
+
+        let homeroomClass = '';
+        if (role === 'Homeroom Teacher') {
+            homeroomClass = document.getElementById('profileHomeroomClass').value;
+            if (!homeroomClass) {
+                showToast('Homeroom teacher must select an assigned class.', 'error');
+                return;
+            }
+        }
+        updateData.homeroomClass = homeroomClass ? homeroomClass : '';
+    }
+
+    showLoading();
+    try {
+        const collectionName = userType === 'student' ? 'students' : 'teachers';
+        await db.collection(collectionName).doc(userId).update(updateData);
+
+        sessionStorage.setItem('userName', name);
+        if (userType === 'student') {
+            sessionStorage.setItem('userClass', updateData.class);
+            document.getElementById('studentNameDisplay').textContent = name;
+            document.getElementById('studentIdDisplay').textContent = `ID: ${userId} | Class: ${updateData.class}`;
+        } else {
+            sessionStorage.setItem('teacherSubject', updateData.subject);
+            sessionStorage.setItem('teacherRole', updateData.role);
+            if (updateData.homeroomClass) {
+                sessionStorage.setItem('homeroomClass', updateData.homeroomClass);
+            } else {
+                sessionStorage.removeItem('homeroomClass');
+            }
+            document.getElementById('teacherNameDisplay').textContent = name;
+        }
+
+        showToast('Profile updated successfully!', 'success');
+        goBackFromProfile();
+    } catch (error) {
+        console.error('Profile update error:', error);
+        showToast('Failed to update profile.', 'error');
+    }
+    hideLoading();
+}
+
+// ==================== CLASS MANAGEMENT ====================
+
+function showAddClassModal() {
+    document.getElementById('classEditMode').value = 'false';
+    document.getElementById('originalClassName').value = '';
+    document.getElementById('newClassName').value = '';
+    document.getElementById('homeroomTeacherInput').value = '';
+    document.getElementById('addClassModalTitle').textContent = 'Add New Class';
+    document.getElementById('saveClassBtn').textContent = '➕ Create Class';
+    document.getElementById('newClassName').readOnly = false;
+    document.getElementById('addClassModalOverlay').classList.add('active');
+}
+
+function showEditClassModal(className, homeroom) {
+    document.getElementById('classEditMode').value = 'true';
+    document.getElementById('originalClassName').value = className;
+    document.getElementById('newClassName').value = className;
+    document.getElementById('homeroomTeacherInput').value = homeroom;
+    document.getElementById('addClassModalTitle').textContent = 'Edit Class';
+    document.getElementById('saveClassBtn').textContent = '💾 Update Class';
+    document.getElementById('newClassName').readOnly = true;
+    document.getElementById('addClassModalOverlay').classList.add('active');
+}
+
+function closeAddClassModal() {
+    document.getElementById('addClassModalOverlay').classList.remove('active');
+    document.getElementById('addClassForm').reset();
+    document.getElementById('newClassName').readOnly = false;
+}
+
+async function handleSaveClass(event) {
+    event.preventDefault();
+    const editMode = document.getElementById('classEditMode').value === 'true';
+    const originalClassName = document.getElementById('originalClassName').value.trim();
+    const className = document.getElementById('newClassName').value.trim();
+    const homeroomTeacher = document.getElementById('homeroomTeacherInput').value.trim();
+
+    if (!className || !homeroomTeacher) {
+        showToast('Please fill in all fields', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        if (editMode) {
+            await db.collection('classes').doc(originalClassName).update({
+                homeroomTeacher: homeroomTeacher,
+                name: originalClassName
+            });
+            showToast('Class updated successfully!', 'success');
+        } else {
+            const existingDoc = await db.collection('classes').doc(className).get();
+            if (existingDoc.exists) {
+                showToast('Class already exists', 'error');
+                hideLoading();
+                return;
+            }
+            await db.collection('classes').doc(className).set({
+                name: className,
+                homeroomTeacher: homeroomTeacher,
+                createdAt: new Date().toISOString()
+            });
+            showToast('Class created successfully!', 'success');
+        }
+        closeAddClassModal();
+        loadTeacherClasses();
+    } catch (error) {
+        console.error('Error saving class:', error);
+        showToast('Failed to save class.', 'error');
+    }
+    hideLoading();
+}
+
+async function deleteClass(className) {
+    if (!confirm(`Are you sure you want to delete the class "${className}"? This action cannot be undone.`)) return;
+    showLoading();
+    try {
+        await db.collection('classes').doc(className).delete();
+        showToast('Class deleted successfully!', 'success');
+        loadTeacherClasses();
+    } catch (error) {
+        console.error('Error deleting class:', error);
+        showToast('Failed to delete class.', 'error');
+    }
+    hideLoading();
+}
+
+// ==================== UTILITIES ====================
+
+function getGrade(marks) {
+    if (marks >= 80) return 'A';
+    if (marks >= 70) return 'A-';
+    if (marks >= 65) return 'B+';
+    if (marks >= 60) return 'B';
+    if (marks >= 55) return 'B-';
+    if (marks >= 50) return 'C+';
+    if (marks >= 45) return 'C';
+    if (marks >= 40) return 'C-';
+    if (marks >= 35) return 'D+';
+    if (marks >= 30) return 'D';
+    return 'F';
+}
+
+function getNGP(marks) {
+    if (marks >= 80) return 4.0;
+    if (marks >= 70) return 3.67;
+    if (marks >= 65) return 3.33;
+    if (marks >= 60) return 3.00;
+    if (marks >= 55) return 2.67;
+    if (marks >= 50) return 2.33;
+    if (marks >= 45) return 2.00;
+    if (marks >= 40) return 1.67;
+    if (marks >= 35) return 1.33;
+    if (marks >= 30) return 1.00;
+    return 0.0;
+}
+
+async function loadClassesForRegistration() {
+    const select = document.getElementById('regStudentClass');
+    try {
+        const snapshot = await db.collection('classes').get();
+        select.innerHTML = '<option value="">-- Select Class --</option>';
+        snapshot.forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = doc.id;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading classes for registration:', error);
+    }
+}
