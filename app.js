@@ -1280,7 +1280,7 @@ async function openProfile() {
         if (userType === 'student') {
             const classSelect = document.getElementById('profileClass');
             await populateClassDropdown(classSelect, data.class);
-            classSelect.disabled = true;   // student cannot change class
+            // Student can now change class – dropdown is enabled by default
         } else {
             document.getElementById('profileRole').value = data.role || '';
             document.getElementById('profileSubject').value = data.subject || '';
@@ -1354,7 +1354,13 @@ async function handleProfileSave(event) {
     if (newPassword) updateData.password = newPassword;
 
     if (userType === 'student') {
-        // Student's class is not changed here
+        // Student can change class
+        const className = document.getElementById('profileClass').value;
+        if (!className) {
+            showToast('Please select a class.', 'error');
+            return;
+        }
+        updateData.class = className;
     } else {
         const role = document.getElementById('profileRole').value;
         const subject = document.getElementById('profileSubject').value;
@@ -1383,8 +1389,9 @@ async function handleProfileSave(event) {
 
         sessionStorage.setItem('userName', name);
         if (userType === 'student') {
-            // class unchanged – update display but keep existing class in session
+            sessionStorage.setItem('userClass', updateData.class);
             document.getElementById('studentNameDisplay').textContent = name;
+            document.getElementById('studentIdDisplay').textContent = `ID: ${userId} | Class: ${updateData.class}`;
         } else {
             sessionStorage.setItem('teacherSubject', updateData.subject);
             sessionStorage.setItem('teacherRole', updateData.role);
