@@ -1710,6 +1710,373 @@ async function deleteCode(id) {
     }
 }
 
+// ========== PRINTABLE STUDENT RANKING REPORT (DUAL MODE) ==========
+
+function printStudentRankingFromClass() {
+    const className = sessionStorage.getItem('currentClass');
+    const term = document.getElementById('analysisTermFilter').value;
+    printStudentRanking(className, term);
+}
+
+function printStudentRankingFromGlobal() {
+    const classFilter = document.getElementById('globalAnalysisClass').value;
+    const term = document.getElementById('globalAnalysisTerm').value;
+    // '__all__' means no class filter → ranking report for all classes
+    printStudentRanking(classFilter === '__all__' ? null : classFilter, term);
+}
+
+async function printStudentRanking(className, term) {
+    const role = sessionStorage.getItem('teacherRole');
+    const teacherSubject = sessionStorage.getItem('teacherSubject');
+
+    showLoading();
+
+    try {
+        // ---------- MODE 1: SPECIFIC CLASS → GRADE TABLE ----------
+        if (className) {
+            // Get all students of the chosen class
+            const studentsSnap = await db.collection('students').where('class', '==', className).get();
+            if (studentsSnap.empty) {
+                showToast('No students in this class.', 'error');
+                hideLoading();
+                return;
+            }
+            const studentsMap = {};
+            studentsSnap.forEach(doc => {
+                studentsMap[doc.id] = { id: doc.id, name: doc.data().name, class: doc.data().class };
+            });
+
+            // Query results for this class (and possibly subject)
+            let resultsQuery = db.collection('results').where('className', '==', className);
+            if (role === 'Regular Teacher' && teacherSubject && teacherSubject !== 'None') {
+                resultsQuery = resultsQuery.where('subject', '==', teacherSubject);
+            }
+            const resultsSnap = await resultsQuery.get();
+            const allResults = [];
+            resultsSnap.forEach(doc => allResults.push(doc.data()));
+
+            // Filter by term if selected
+            const filtered = term ? allResults.filter(r => r.term === term) : allResults;
+            if (filtered.length === 0) {
+                showToast(`No results found for ${term || 'any term'}.`, 'error');
+                hideLoading();
+                return;
+            }
+
+            // Build per‑student data: marks per subject and overall NGP
+            const studentData = {};
+            filtered.forEach(r => {
+                if (!studentsMap[r.studentId]) return;
+                if (!studentData[r.studentId]) {
+                    studentData[r.studentId] = {
+                        name: studentsMap[r.studentId].name,
+                        id: r.studentId,
+                        class: studentsMap[r.studentId].class,
+                        subjects: {},
+                        ngpTotal: 0,
+                        ngpCount: 0
+                    };
+                }
+                const stu = studentData[r.studentId];
+                // Store the highest mark if duplicates exist (shouldn't)
+                if (!stu.subjects[r.subject] || r.marks > stu.subjects[r.subject]) {
+                    stu.subjects[r.subject] = r.marks;
+                }
+                stu.ngpTotal += getNGP(r.marks);
+                stu.ngpCount++;
+            });
+
+            // Determine all subjects (alphabetically)
+            const allSubjects = new Set();
+            Object.values(studentData).forEach(s => Object.keys(s.subjects).forEach(sub => allSubjects.add(sub)));
+            const subjectsSorted = Array.from(allSubjects).sort();
+
+            // Build student list sorted by name
+            const studentList = Object.values(studentData);
+            studentList.sort((a, b) => a.name.localeCompare(b.name));
+
+            // Generate HTML for grade table
+            let html = `<h3>Class: ${className} | ${term ? 'Term: ' + term : 'All Terms'}</h3>`;
+            html += `<table>
+                <thead>
+                    <tr>
+                        <th>Bil</th>
+                        <th>Nama Pelajar</th>
+                        <th>No. IC</th>
+                        <th>Kelas</th>`;
+            subjectsSorted.forEach(sub => html += `<th>${sub}</th>`);
+            html += `<th>GP</th></tr></thead><tbody>`;
+
+            let counter = 1;
+            studentList.forEach(s => {
+                const avgNgp = s.ngpCount > 0 ? (s.ngpTotal / s.ngpCount).toFixed(2) : '0.00';
+                html += `<tr>
+                    <td>${counter++}</td>
+                    <td>${s.name}</td>
+                    <td>${s.id}</td>
+                    <td>${s.class}</td>`;
+                subjectsSorted.forEach(sub => {
+                    const mark = s.subjects[sub];
+                    const grade = mark !== undefined ? getGrade(mark) : '--';
+                    html += `<td>${grade}</td>`;
+                });
+                html += `<td><strong>${avgNgp}</strong></td></tr>`;
+            });
+            html += '</tbody></table>';
+
+            // Open print window
+            const printWindow = window.open('', '_blank', 'width=1000,height=700');
+            if (!printWindow) {
+                showToast('Popup blocked. Please allow popups.', 'error');
+                hideLoading();
+                return;
+            }
+
+            const logoImg = document.getElementById('appLogoImage');
+            const logoSrc = logoImg ? logoImg.src : '';
+            const printCSS = `
+                <style>
+                    body { font-family: 'Segoe UI', sans-serif; margin: 20px; color: #000; background: #fff; }
+                    .print-header { display: flex; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+                    .print-logo { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; margin-right: 20px; }
+                    table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-size: 0.85rem; }
+                    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+                    th { background: #f0f0f0; }
+                    h3 { margin-top: 10px; }
+                </style>
+            `;
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head><title>Student Grade Report</title>${printCSS}</head>
+                <body>
+                    <div class="print-header">
+                        ${logoSrc ? `<img class="print-logo" src="${logoSrc}" />` : ''}
+                        <h1>Pusat Tingkatan Enam SMK Badin</h1>
+                    </div>
+                    <h2>Student Grade Report</h2>
+                    ${html}
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => { printWindow.print(); printWindow.close(); }, 800);
+            hideLoading();
+            return;
+        }
+
+        // ---------- MODE 2: ALL CLASSES → RANKING REPORT ----------
+        let studentsQuery = db.collection('students');
+        const studentsSnap = await studentsQuery.get();
+        if (studentsSnap.empty) {
+            showToast('No students found.', 'error');
+            hideLoading();
+            return;
+        }
+        const studentsMap = {};
+        studentsSnap.forEach(doc => {
+            studentsMap[doc.id] = { id: doc.id, name: doc.data().name, class: doc.data().class };
+        });
+
+        // Build results query – if a regular teacher, restrict to their subject
+        let resultsQuery = db.collection('results');
+        if (role === 'Regular Teacher' && teacherSubject && teacherSubject !== 'None') {
+            resultsQuery = resultsQuery.where('subject', '==', teacherSubject);
+        }
+        const resultsSnap = await resultsQuery.get();
+        const allResults = [];
+        resultsSnap.forEach(doc => allResults.push({ id: doc.id, ...doc.data() }));
+
+        const filtered = term ? allResults.filter(r => r.term === term) : allResults;
+
+        // Overall school ranking (all students, all results)
+        const allStudentsSnap = await db.collection('students').get();
+        const allStudentsMap = {};
+        allStudentsSnap.forEach(doc => {
+            allStudentsMap[doc.id] = { id: doc.id, class: doc.data().class };
+        });
+        const allResSnap = await db.collection('results').get();
+        const allRes = [];
+        allResSnap.forEach(doc => allRes.push(doc.data()));
+        const allFiltered = term ? allRes.filter(r => r.term === term) : allRes;
+
+        const overallStudentNgpMap = {};
+        allFiltered.forEach(r => {
+            if (!allStudentsMap[r.studentId]) return;
+            if (!overallStudentNgpMap[r.studentId]) {
+                overallStudentNgpMap[r.studentId] = { totalNgp: 0, count: 0 };
+            }
+            overallStudentNgpMap[r.studentId].totalNgp += getNGP(r.marks);
+            overallStudentNgpMap[r.studentId].count += 1;
+        });
+
+        // Per‑student data from the filtered results for the report
+        const studentDataMap = {};
+        filtered.forEach(r => {
+            if (!studentsMap[r.studentId]) return;
+            if (!studentDataMap[r.studentId]) {
+                studentDataMap[r.studentId] = {
+                    name: studentsMap[r.studentId].name,
+                    id: r.studentId,
+                    class: studentsMap[r.studentId].class,
+                    overallNgpTotal: 0,
+                    overallCount: 0,
+                    subjects: {}
+                };
+            }
+            const stu = studentDataMap[r.studentId];
+            stu.overallNgpTotal += getNGP(r.marks);
+            stu.overallCount += 1;
+            if (!stu.subjects[r.subject]) {
+                stu.subjects[r.subject] = { totalNgp: 0, count: 0 };
+            }
+            stu.subjects[r.subject].totalNgp += getNGP(r.marks);
+            stu.subjects[r.subject].count += 1;
+        });
+
+        const studentList = [];
+        for (const [sid, data] of Object.entries(studentDataMap)) {
+            const avgNgp = data.overallCount > 0 ? data.overallNgpTotal / data.overallCount : 0;
+            const subjectAverages = {};
+            for (const [subj, val] of Object.entries(data.subjects)) {
+                subjectAverages[subj] = val.count > 0 ? (val.totalNgp / val.count).toFixed(2) : '0.00';
+            }
+            studentList.push({
+                id: sid,
+                name: data.name,
+                class: data.class,
+                avgNgp,
+                subjectsAvg: subjectAverages
+            });
+        }
+
+        const classGroups = {};
+        studentList.forEach(s => {
+            if (!classGroups[s.class]) classGroups[s.class] = [];
+            classGroups[s.class].push(s);
+        });
+        const sortedClasses = Object.keys(classGroups).sort();
+
+        // Class ranking within each class
+        for (const cls of sortedClasses) {
+            const arr = classGroups[cls];
+            arr.sort((a, b) => b.avgNgp - a.avgNgp);
+            let rank = 1;
+            let prevNgp = arr[0]?.avgNgp;
+            for (let i = 0; i < arr.length; i++) {
+                if (arr[i].avgNgp < prevNgp) {
+                    rank = i + 1;
+                    prevNgp = arr[i].avgNgp;
+                }
+                arr[i].classRank = rank;
+            }
+        }
+
+        // Overall school ranking
+        const overallList = [];
+        for (const [sid, data] of Object.entries(overallStudentNgpMap)) {
+            if (data.count > 0) overallList.push({ id: sid, avgNgp: data.totalNgp / data.count });
+        }
+        overallList.sort((a, b) => b.avgNgp - a.avgNgp);
+        let rank = 1;
+        let prevNgp = overallList[0]?.avgNgp;
+        const rankMap = {};
+        for (let i = 0; i < overallList.length; i++) {
+            if (overallList[i].avgNgp < prevNgp) {
+                rank = i + 1;
+                prevNgp = overallList[i].avgNgp;
+            }
+            rankMap[overallList[i].id] = rank;
+        }
+        studentList.forEach(s => {
+            s.overallRank = rankMap[s.id] || 'N/A';
+        });
+
+        // Build HTML ranking report
+        let html = '';
+        let counter = 1;
+        for (const cls of sortedClasses) {
+            html += `<h3>Kelas: ${cls}</h3>`;
+            html += `<table>
+                <thead>
+                    <tr>
+                        <th>Bil.</th>
+                        <th>Nama Pelajar</th>
+                        <th>No. IC</th>
+                        <th>Kelas</th>
+                        <th>Kedudukan Dalam Kelas</th>
+                        <th>Kedudukan Keseluruhan</th>
+                        <th>NGP</th>
+                        <th>Markah Purata Setiap Subjek</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            const studentsInClass = classGroups[cls];
+            studentsInClass.forEach(s => {
+                const subjectLines = Object.entries(s.subjectsAvg).map(([subj, ngp]) => `${subj}: ${ngp}`);
+                const subjectStr = subjectLines.join('<br>');
+                html += `<tr>
+                    <td>${counter++}</td>
+                    <td>${s.name}</td>
+                    <td>${s.id}</td>
+                    <td>${s.class}</td>
+                    <td>${s.classRank}</td>
+                    <td>${s.overallRank}</td>
+                    <td><strong>${s.avgNgp.toFixed(2)}</strong></td>
+                    <td style="line-height:1.4;">${subjectStr}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+        }
+
+        // Print window for ranking report
+        const printWindow = window.open('', '_blank', 'width=900,height=700');
+        if (!printWindow) {
+            showToast('Popup blocked. Please allow popups.', 'error');
+            hideLoading();
+            return;
+        }
+
+        const logoImg = document.getElementById('appLogoImage');
+        const logoSrc = logoImg ? logoImg.src : '';
+        const printCSS = `
+            <style>
+                body { font-family: 'Segoe UI', sans-serif; margin: 20px; color: #000; background: #fff; }
+                .print-header { display: flex; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+                .print-logo { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; margin-right: 20px; }
+                table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+                th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+                th { background: #f0f0f0; }
+                h3 { margin-top: 20px; }
+            </style>
+        `;
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head><title>Kedudukan Pelajar</title>${printCSS}</head>
+            <body>
+                <div class="print-header">
+                    ${logoSrc ? `<img class="print-logo" src="${logoSrc}" />` : ''}
+                    <h1>Pusat Tingkatan Enam SMK Badin</h1>
+                </div>
+                <h2>Analisis Keseluruhan Peperiksaan</h2>
+                <p>Keseluruhan Kelas | ${term ? 'Penggal: ' + term : 'All Terms'}</p>
+                ${html}
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => { printWindow.print(); printWindow.close(); }, 800);
+
+    } catch (err) {
+        console.error('Print ranking error:', err);
+        showToast('Failed to generate report.', 'error');
+    }
+    hideLoading();
+}
+
 // ========== INITIAL SETUP & EVENT BINDING ==========
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('studentLoginForm').addEventListener('submit', handleStudentLogin);
