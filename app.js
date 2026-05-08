@@ -1,4 +1,5 @@
-// app.js – Complete system with OTP verification, admin panel, and per‑subject grade distribution analysis
+// app.js – Complete system with OTP verification, admin panel, per‑subject grade distribution analysis,
+// and new MUET section marks.
 
 // ========== FIREBASE CONFIGURATION ==========
 const firebaseConfig = {
@@ -162,11 +163,8 @@ async function handleStudentLogin(event) {
         document.getElementById('studentNameDisplay').textContent = studentData.name;
         document.getElementById('studentIdDisplay').textContent = `ID: ${studentId} | Class: ${studentData.class}`;
 
-        const muetBand = studentData.muetBand || null;
-        document.getElementById('muetDisplay').innerHTML = muetBand
-            ? `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${muetBand}</div>`
-            : '';
-
+        // MUET display handled in loadStudentResults, so we clear it first
+        document.getElementById('muetDisplay').innerHTML = '';
         await loadStudentResults(studentId, studentData.class);
         navigateTo('student-results');
         showToast('Login successful!', 'success');
@@ -360,17 +358,132 @@ async function loadStudentResults(studentId, className) {
             html += `<div class="result-summary"><strong>Overall Average NGP: ${ownAvgNgp.toFixed(2)}</strong></div>`;
         }
 
-        // Class ranking (existing code kept)
-        // ... (all existing ranking code remains here, unchanged)
-        // For brevity, the full ranking code is included as in your original file.
+        // Class ranking
+        if (className) {
+            try {
+                const classResultsSnap = await db.collection('results').where('className', '==', className).get();
+                const studentNgpMap = {};
+                classResultsSnap.forEach(doc => {
+                    const r = doc.data();
+                    if (!studentNgpMap[r.studentId]) studentNgpMap[r.studentId] = { totalNgp: 0, count: 0 };
+                    studentNgpMap[r.studentId].totalNgp += getNGP(r.marks);
+                    studentNgpMap[r.studentId].count += 1;
+                });
+
+                const averages = Object.entries(studentNgpMap).map(([id, data]) => ({
+                    studentId: id,
+                    avgNgp: data.totalNgp / data.count
+                }));
+                averages.sort((a, b) => b.avgNgp - a.avgNgp);
+
+                let classPosition = 'N/A';
+                if (averages.length > 0) {
+                    let rank = 1;
+                    let prevAvg = averages[0].avgNgp;
+                    for (let i = 0; i < averages.length; i++) {
+                        if (averages[i].avgNgp < prevAvg) {
+                            rank = i + 1;
+                            prevAvg = averages[i].avgNgp;
+                        }
+                        if (averages[i].studentId === studentId) {
+                            classPosition = rank;
+                            break;
+                        }
+                    }
+                }
+
+                let status = '';
+                if (ownAvgNgp >= 3.67) status = 'Excellent';
+                else if (ownAvgNgp >= 3.00) status = 'Good';
+                else if (ownAvgNgp >= 2.00) status = 'Satisfactory';
+                else status = 'Needs Improvement';
+
+                html += `
+                <div class="status-container mt-12">
+                    <div class="status-badge green">
+                        <strong>🏅 Class Position: ${classPosition}</strong> (based on NGP)
+                    </div>
+                    <div class="status-badge blue">
+                        <strong>📊 Academic Status: ${status}</strong>
+                    </div>
+                </div>`;
+            } catch (err) {
+                console.error('Class ranking error:', err);
+                html += '<p class="text-light">Could not calculate class ranking.</p>';
+            }
+        }
+
+        // Overall school ranking
+        try {
+            const allResultsSnap = await db.collection('results').get();
+            const allStudentNgpMap = {};
+            allResultsSnap.forEach(doc => {
+                const r = doc.data();
+                if (!allStudentNgpMap[r.studentId]) allStudentNgpMap[r.studentId] = { totalNgp: 0, count: 0 };
+                allStudentNgpMap[r.studentId].totalNgp += getNGP(r.marks);
+                allStudentNgpMap[r.studentId].count += 1;
+            });
+
+            const allAverages = Object.entries(allStudentNgpMap).map(([id, data]) => ({
+                studentId: id,
+                avgNgp: data.totalNgp / data.count
+            }));
+            allAverages.sort((a, b) => b.avgNgp - a.avgNgp);
+
+            let overallPosition = 'N/A';
+            let totalRanked = allAverages.length;
+            if (allAverages.length > 0) {
+                let rank = 1;
+                let prevAvg = allAverages[0].avgNgp;
+                for (let i = 0; i < allAverages.length; i++) {
+                    if (allAverages[i].avgNgp < prevAvg) {
+                        rank = i + 1;
+                        prevAvg = allAverages[i].avgNgp;
+                    }
+                    if (allAverages[i].studentId === studentId) {
+                        overallPosition = rank;
+                        break;
+                    }
+                }
+            }
+
+            html += `
+            <div class="status-container mt-12">
+                <div class="status-badge green" style="border-color: #f59e0b; color: #fbbf24;">
+                    <strong>🌍 Overall School Rank: ${overallPosition}</strong> out of ${totalRanked} students
+                </div>
+            </div>`;
+        } catch (err) {
+            console.error('Overall ranking error:', err);
+            html += '<p class="text-light">Could not calculate overall school rank.</p>';
+        }
 
         contentDiv.innerHTML = html;
 
+        // ---------- MUET DISPLAY (detailed) ----------
         const stuDoc = await db.collection('students').doc(studentId).get();
-        const muetBand = stuDoc.exists ? stuDoc.data().muetBand || null : null;
-        document.getElementById('muetDisplay').innerHTML = muetBand
-            ? `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${muetBand}</div>`
-            : '';
+        let muetHTML = '';
+        if (stuDoc.exists) {
+            const muetData = stuDoc.data().muet;
+            if (muetData) {
+                const l = muetData.listening ?? '-';
+                const s = muetData.speaking ?? '-';
+                const r = muetData.reading ?? '-';
+                const w = muetData.writing ?? '-';
+                const total = muetData.total ?? '-';
+                const band = muetData.band || stuDoc.data().muetBand || '';
+                muetHTML = `
+                    <div class="badge badge-b" style="font-size:0.95rem; line-height:1.6;">
+                        <strong>MUET</strong> – Band: ${band}<br>
+                        <small>L: ${l} | S: ${s} | R: ${r} | W: ${w} | Total: ${total}/300</small>
+                    </div>`;
+            } else {
+                const band = stuDoc.data().muetBand || null;
+                if (band) muetHTML = `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${band}</div>`;
+            }
+        }
+        document.getElementById('muetDisplay').innerHTML = muetHTML;
+        // ---------- end MUET display ----------
     } catch (error) {
         console.error('Error loading results:', error);
         contentDiv.innerHTML = '<p class="text-center error-text">Error loading results.</p>';
@@ -445,7 +558,7 @@ async function loadClassStudents(className) {
                 <td>${student.name}</td>
                 <td>
                     <button class="btn btn-xs btn-primary" onclick="showResultModal('${student.id}', '${student.name}', '${className}')">📝 Results</button>
-                    <button class="btn btn-xs btn-accent" onclick="showMuetModal('${student.id}', '${className}')">🎤 MUET</button>
+                    <button class="btn btn-xs btn-accent" onclick="showMuetModal('${student.id}', '${className}')">📘MUET</button>
                     <button class="btn btn-xs btn-danger" onclick="deleteStudent('${student.id}', '${className}')">🗑️ Delete</button>
                 </td>
             </tr>`;
@@ -615,10 +728,23 @@ async function deleteStudent(studentId, className) {
     hideLoading();
 }
 
-// ========== MUET MANAGEMENT ==========
+// ========== MUET MANAGEMENT (NEW: section marks) ==========
+
 function showMuetModal(studentId, className) {
     document.getElementById('muetStudentId').value = studentId;
     document.getElementById('muetClassName').value = className;
+
+    // Reset fields
+    document.getElementById('muetListening').value = '';
+    document.getElementById('muetSpeaking').value = '';
+    document.getElementById('muetReading').value = '';
+    document.getElementById('muetWriting').value = '';
+    document.getElementById('muetTotalDisplay').textContent = '--';
+    document.getElementById('muetBandDisplay').textContent = '--';
+
+    // Load existing MUET data if any
+    loadExistingMuet(studentId);
+
     document.getElementById('muetModalOverlay').classList.add('active');
 }
 
@@ -627,19 +753,85 @@ function closeMuetModal() {
     document.getElementById('muetForm').reset();
 }
 
+// Load existing MUET data to populate the fields
+async function loadExistingMuet(studentId) {
+    try {
+        const doc = await db.collection('students').doc(studentId).get();
+        if (doc.exists) {
+            const data = doc.data();
+            if (data.muet) {
+                document.getElementById('muetListening').value = data.muet.listening ?? '';
+                document.getElementById('muetSpeaking').value = data.muet.speaking ?? '';
+                document.getElementById('muetReading').value = data.muet.reading ?? '';
+                document.getElementById('muetWriting').value = data.muet.writing ?? '';
+                calculateMuetBand(); // auto-calculate from loaded marks
+            }
+        }
+    } catch (err) {
+        console.error('Error loading MUET data:', err);
+    }
+}
+
+// Calculate total and band from section marks
+function calculateMuetBand() {
+    const listening = parseInt(document.getElementById('muetListening').value) || 0;
+    const speaking = parseInt(document.getElementById('muetSpeaking').value) || 0;
+    const reading = parseInt(document.getElementById('muetReading').value) || 0;
+    const writing = parseInt(document.getElementById('muetWriting').value) || 0;
+
+    const total = listening + speaking + reading + writing;
+    document.getElementById('muetTotalDisplay').textContent = total;
+
+    let band;
+    if (total >= 331 && total <= 360) band = 'Band 5+';
+    else if (total >= 294 && total <= 330) band = 'Band 5.0';
+    else if (total >= 258 && total <= 293) band = 'Band 4.5';
+    else if (total >= 211 && total <= 257) band = 'Band 4.0';
+    else if (total >= 164 && total <= 210) band = 'Band 3.5';
+    else if (total >= 123 && total <= 163) band = 'Band 3.0';
+    else if (total >= 82 && total <= 122) band = 'Band 2.5';
+    else if (total >= 26 && total <= 81) band = 'Band 2.0';
+    else if (total >= 1 && total <= 25) band = 'Band 1.0';
+    else band = 'Invalid Marks';
+
+    document.getElementById('muetBandDisplay').textContent = band;
+    return { total, band };
+}
+
+// Save the MUET record to Firestore
 async function handleSaveMuet(event) {
     event.preventDefault();
     const studentId = document.getElementById('muetStudentId').value;
-    const band = document.getElementById('muetBand').value;
+    const listening = parseInt(document.getElementById('muetListening').value);
+    const speaking = parseInt(document.getElementById('muetSpeaking').value);
+    const reading = parseInt(document.getElementById('muetReading').value);
+    const writing = parseInt(document.getElementById('muetWriting').value);
 
-    if (!band) {
-        showToast('Please select a band', 'error');
+    if (isNaN(listening) || isNaN(speaking) || isNaN(reading) || isNaN(writing)) {
+        showToast('Please enter all marks', 'error');
+        return;
+    }
+
+    const { total, band } = calculateMuetBand();
+    if (band === 'Invalid Marks') {
+        showToast('Total marks out of range (40–300)', 'error');
         return;
     }
 
     showLoading();
     try {
-        await db.collection('students').doc(studentId).update({ muetBand: band });
+        // Save as a map (muet object) + also keep a simple band string for quick display
+        await db.collection('students').doc(studentId).update({
+            muetBand: band,               // for old compatibility
+            muet: {
+                listening: listening,
+                speaking: speaking,
+                reading: reading,
+                writing: writing,
+                total: total,
+                band: band
+            }
+        });
         showToast('MUET result saved!', 'success');
         closeMuetModal();
     } catch (error) {
@@ -649,7 +841,7 @@ async function handleSaveMuet(event) {
     hideLoading();
 }
 
-// ========== PER‑CLASS ANALYSIS (NEW – grade distribution per subject) ==========
+// ========== PER‑CLASS ANALYSIS (grade distribution per subject) ==========
 function openAnalysisModal() {
     const className = sessionStorage.getItem('currentClass');
     if (!className) {
@@ -780,7 +972,7 @@ async function runAnalysis() {
     }
 }
 
-// ========== GLOBAL ANALYSIS (NEW – grade distribution per subject) ==========
+// ========== GLOBAL ANALYSIS (grade distribution per subject) ==========
 async function openGlobalAnalysisModal() {
     const role = sessionStorage.getItem('teacherRole');
     const homeroomClass = sessionStorage.getItem('homeroomClass');
