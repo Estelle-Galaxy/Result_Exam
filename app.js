@@ -1157,7 +1157,7 @@ function showEditClassModal(className, homeroom) {
     document.getElementById('homeroomTeacherInput').value = homeroom;
     document.getElementById('addClassModalTitle').textContent = 'Edit Class';
     document.getElementById('saveClassBtn').textContent = '💾 Update Class';
-    document.getElementById('newClassName').readOnly = true;
+    document.getElementById('newClassName').readOnly = false;
     document.getElementById('addClassModalOverlay').classList.add('active');
 }
 
@@ -1182,11 +1182,34 @@ async function handleSaveClass(event) {
     showLoading();
     try {
         if (editMode) {
-            await db.collection('classes').doc(originalClassName).update({
-                homeroomTeacher: homeroomTeacher,
-                name: originalClassName
-            });
-            showToast('Class updated successfully!', 'success');
+            const isNameChanged = className !== originalClassName;
+            
+            if (isNameChanged) {
+                // Check if new class name already exists
+                const existingDoc = await db.collection('classes').doc(className).get();
+                if (existingDoc.exists) {
+                    showToast('A class with that name already exists', 'error');
+                    hideLoading();
+                    return;
+                }
+                
+                // Create new class with updated name
+                await db.collection('classes').doc(className).set({
+                    name: className,
+                    homeroomTeacher: homeroomTeacher,
+                    createdAt: new Date().toISOString()
+                });
+                
+                // Delete old class
+                await db.collection('classes').doc(originalClassName).delete();
+                showToast('Class updated and renamed successfully!', 'success');
+            } else {
+                // Only homeroom teacher changed
+                await db.collection('classes').doc(originalClassName).update({
+                    homeroomTeacher: homeroomTeacher
+                });
+                showToast('Class updated successfully!', 'success');
+            }
         } else {
             const existingDoc = await db.collection('classes').doc(className).get();
             if (existingDoc.exists) {
@@ -1239,12 +1262,24 @@ async function openProfile() {
 
     const studentFields = document.getElementById('profileStudentFields');
     const teacherFields = document.getElementById('profileTeacherFields');
+
+    // Reset required attributes to avoid hidden-field validation errors
+    document.getElementById('profileClass').removeAttribute('required');
+    document.getElementById('profileRole').removeAttribute('required');
+    document.getElementById('profileSubject').removeAttribute('required');
+    document.getElementById('profileHomeroomClass').removeAttribute('required');
+
     if (userType === 'student') {
         studentFields.style.display = 'block';
         teacherFields.style.display = 'none';
+        // Only student class is required
+        document.getElementById('profileClass').setAttribute('required', '');
     } else {
         studentFields.style.display = 'none';
         teacherFields.style.display = 'block';
+        // Teacher role and subject are required; homeroom handled separately
+        document.getElementById('profileRole').setAttribute('required', '');
+        document.getElementById('profileSubject').setAttribute('required', '');
     }
 
     showLoading();
@@ -1270,7 +1305,7 @@ async function openProfile() {
 
             const classSelect = document.getElementById('profileHomeroomClass');
             await populateClassDropdown(classSelect, data.homeroomClass || '');
-            toggleProfileHomeroomClass();
+            toggleProfileHomeroomClass();   // This will also set required for homeroom if needed
         }
 
         navigateTo('profile');
@@ -1279,22 +1314,6 @@ async function openProfile() {
         showToast('Failed to load profile.', 'error');
     }
     hideLoading();
-}
-
-async function populateClassDropdown(selectElement, selectedValue) {
-    try {
-        const snapshot = await db.collection('classes').get();
-        selectElement.innerHTML = '<option value="">-- Select Class --</option>';
-        snapshot.forEach(doc => {
-            const option = document.createElement('option');
-            option.value = doc.id;
-            option.textContent = doc.id;
-            selectElement.appendChild(option);
-        });
-        if (selectedValue) selectElement.value = selectedValue;
-    } catch (error) {
-        console.error('Error populating class dropdown:', error);
-    }
 }
 
 function toggleProfileHomeroomClass() {
@@ -1327,6 +1346,8 @@ async function handleProfileSave(event) {
     const userId = document.getElementById('profileUserId').value;
     const name = document.getElementById('profileName').value.trim();
     const newPassword = document.getElementById('profileNewPassword').value;
+
+    console.log('handleProfileSave called', { userType, userId, name, newPassword });
 
     if (!name) {
         showToast('Name is required.', 'error');
@@ -1366,6 +1387,7 @@ async function handleProfileSave(event) {
 
     showLoading();
     try {
+        console.log('Profile update payload', { collection: userType === 'student' ? 'students' : 'teachers', userId, updateData });
         const collectionName = userType === 'student' ? 'students' : 'teachers';
         await db.collection(collectionName).doc(userId).update(updateData);
 
@@ -1389,9 +1411,25 @@ async function handleProfileSave(event) {
         goBackFromProfile();
     } catch (error) {
         console.error('Profile update error:', error);
-        showToast('Failed to update profile.', 'error');
+        showToast(`Failed to update profile. ${error.message || ''}`, 'error');
     }
     hideLoading();
+}
+
+async function populateClassDropdown(selectElement, selectedValue) {
+    try {
+        const snapshot = await db.collection('classes').get();
+        selectElement.innerHTML = '<option value="">-- Select Class --</option>';
+        snapshot.forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = doc.id;
+            selectElement.appendChild(option);
+        });
+        if (selectedValue) selectElement.value = selectedValue;
+    } catch (error) {
+        console.error('Error populating class dropdown:', error);
+    }
 }
 
 // ========== REGISTRATION HELPERS ==========
