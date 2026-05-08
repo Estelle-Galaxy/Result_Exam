@@ -538,3 +538,24 @@ tr:last-child td {
     padding: 8px 10px;
     text-align: center;
 }
+
+/* ---------- COUNTDOWN TIMER (Verification Page) ---------- */
+.countdown-box {
+  text-align: center;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: rgba(255,255,255,0.08);
+  border-radius: 12px;
+}
+.countdown-label {
+  font-size: 0.9rem;
+  color: #aaa;
+  display: block;
+  margin-bottom: 0.3rem;
+}
+.countdown-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #4a90e2;
+  letter-spacing: 2px;
+}
