@@ -1800,10 +1800,10 @@ async function printStudentRanking(className, term) {
             html += `<table>
                 <thead>
                     <tr>
-                        <th>Bil</th>
-                        <th>Nama Pelajar</th>
-                        <th>No. IC</th>
-                        <th>Kelas</th>`;
+                        <th>No.</th>
+                        <th>Student Name</th>
+                        <th>IC No.</th>
+                        <th>Class</th>`;
             subjectsSorted.forEach(sub => html += `<th>${sub}</th>`);
             html += `<th>GP</th></tr></thead><tbody>`;
 
@@ -2001,14 +2001,14 @@ async function printStudentRanking(className, term) {
             html += `<table>
                 <thead>
                     <tr>
-                        <th>Bil.</th>
-                        <th>Nama Pelajar</th>
-                        <th>No. IC</th>
-                        <th>Kelas</th>
-                        <th>Kedudukan Dalam Kelas</th>
-                        <th>Kedudukan Keseluruhan</th>
+                        <th>No.</th>
+                        <th>Student Name</th>
+                        <th>IC No.</th>
+                        <th>Class</th>
+                        <th>Class Rank</th>
+                        <th>Overall Rank</th>
                         <th>NGP</th>
-                        <th>Markah Purata Setiap Subjek</th>
+                        <th>Subject Average NGP</th>
                     </tr>
                 </thead>
                 <tbody>`;
@@ -2054,14 +2054,14 @@ async function printStudentRanking(className, term) {
         printWindow.document.write(`
             <!DOCTYPE html>
             <html>
-            <head><title>Kedudukan Pelajar</title>${printCSS}</head>
+            <head><title>Overall Ranking</title>${printCSS}</head>
             <body>
                 <div class="print-header">
                     ${logoSrc ? `<img class="print-logo" src="${logoSrc}" />` : ''}
                     <h1>Pusat Tingkatan Enam SMK Badin</h1>
                 </div>
-                <h2>Analisis Keseluruhan Peperiksaan</h2>
-                <p>Keseluruhan Kelas | ${term ? 'Penggal: ' + term : 'All Terms'}</p>
+                <h2>Overall Examination Analysis</h2>
+                <p>Overall Classes | ${term ? 'Term: ' + term : 'All Terms'}</p>
                 ${html}
             </body>
             </html>
