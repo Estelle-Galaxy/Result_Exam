@@ -1,5 +1,5 @@
 // app.js – Complete system with OTP verification, admin panel, per‑subject grade distribution analysis,
-// and new MUET section marks.
+// new MUET section marks, and student details in printed slip.
 
 // ========== FIREBASE CONFIGURATION ==========
 const firebaseConfig = {
@@ -56,7 +56,7 @@ function navigateTo(pageId) {
     if (pageId === 'admin-verify') loadAdminCodes();
 }
 
-// ========== PRINT FUNCTION ==========
+// ========== PRINT FUNCTION (UPDATED – includes student details) ==========
 function printContent(areaId, reportTitle = 'Pusat Tingkatan Enam SMK Badin', reportSubtitle = '') {
     const printArea = document.getElementById(areaId);
     if (!printArea) {
@@ -81,7 +81,9 @@ function printContent(areaId, reportTitle = 'Pusat Tingkatan Enam SMK Badin', re
     }
 
     const logoHTML = logoSrc ? `<img class="print-logo" src="${logoSrc}" alt="Logo" />` : '';
-    const headerHTML = `
+
+    // Build school header
+    let headerHTML = `
         <div class="print-header">
             ${logoHTML}
             <div class="print-title-box">
@@ -91,6 +93,20 @@ function printContent(areaId, reportTitle = 'Pusat Tingkatan Enam SMK Badin', re
         </div>
     `;
 
+    // If printing student results, include student details
+    if (areaId === 'studentResultsPrintArea') {
+        const userName = sessionStorage.getItem('userName') || '';
+        const userId = sessionStorage.getItem('userId') || '';
+        const userClass = sessionStorage.getItem('userClass') || '';
+        headerHTML += `
+            <div class="student-detail-print">
+                <p><strong>Student Name:</strong> ${userName}</p>
+                <p><strong>IC No.:</strong> ${userId}</p>
+                <p><strong>Class:</strong> ${userClass}</p>
+            </div>
+        `;
+    }
+
     const printCSS = `
         <style>
             body { font-family: 'Segoe UI', sans-serif; margin: 20px; color: #000; background: #fff; }
@@ -99,6 +115,8 @@ function printContent(areaId, reportTitle = 'Pusat Tingkatan Enam SMK Badin', re
             .print-title-box { text-align: center; flex: 1; }
             .print-title { font-size: 1.4rem; margin: 0; }
             .print-subtitle { font-size: 0.9rem; color: #333; margin-top: 6px; }
+            .student-detail-print { margin-bottom: 16px; border: 1px solid #ccc; padding: 10px; background: #fafafa; }
+            .student-detail-print p { margin: 4px 0; font-size: 1rem; }
             table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
             th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
             th { background: #f0f0f0; }
@@ -474,7 +492,7 @@ async function loadStudentResults(studentId, className) {
                 const band = muetData.band || stuDoc.data().muetBand || '';
                 muetHTML = `
                     <div class="badge badge-b" style="font-size:0.95rem; line-height:1.6;">
-                        <strong>MUET</strong> – Band: ${band}<br>
+                        <strong>MUET</strong> – ${band}<br>
                         <small>L: ${l} | S: ${s} | R: ${r} | W: ${w} | Total: ${total}/300</small>
                     </div>`;
             } else {
@@ -783,7 +801,7 @@ function calculateMuetBand() {
     document.getElementById('muetTotalDisplay').textContent = total;
 
     let band;
-    if (total >= 331 && total <= 360) band = 'Band 5+';
+    if (total >= 331 && total <= 360) band = '5+';
     else if (total >= 294 && total <= 330) band = 'Band 5.0';
     else if (total >= 258 && total <= 293) band = 'Band 4.5';
     else if (total >= 211 && total <= 257) band = 'Band 4.0';
