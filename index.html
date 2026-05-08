@@ -302,7 +302,7 @@
                 <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="goBackFromProfile()">← Back</button>
                 <h2 class="app-title">👤 My Profile</h2>
                 <p class="app-subtitle">View and update your personal details</p>
-                <form id="profileForm" onsubmit="return false;">
+                <form id="profileForm">
                     <input type="hidden" id="profileUserType" value="">
                     <input type="hidden" id="profileUserId" value="">
                     <div class="form-group">
@@ -512,10 +512,12 @@
         </div>
     </div>
 
+    <!-- ========== CLASS ANALYSIS MODAL (with Print Ranking button) ========== -->
     <div class="modal-overlay" id="analysisModalOverlay">
         <div class="modal" id="analysisModal" style="max-width: 700px;">
             <div class="modal-header-actions" style="display: flex; gap: 8px; position: absolute; top: 12px; right: 16px;">
-                <button class="btn btn-sm btn-outline btn-auto" onclick="printContent('analysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Class Analysis')">🖨️ Print</button>
+                <button class="btn btn-sm btn-outline btn-auto" onclick="printContent('analysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Class Analysis')">🖨️ Print Chart</button>
+                <button class="btn btn-sm btn-outline btn-auto" onclick="printStudentRankingFromClass()">📋 Print Ranking</button>
                 <button class="modal-close" onclick="closeAnalysisModal()">✕</button>
             </div>
             <h3 id="analysisModalTitle">📊 Class Exam Analysis</h3>
@@ -542,10 +544,12 @@
         </div>
     </div>
 
+    <!-- ========== GLOBAL ANALYSIS MODAL (with Print Ranking button) ========== -->
     <div class="modal-overlay" id="globalAnalysisModalOverlay">
         <div class="modal" id="globalAnalysisModal" style="max-width: 700px;">
             <div class="modal-header-actions" style="display: flex; gap: 8px; position: absolute; top: 12px; right: 16px;">
-                <button class="btn btn-sm btn-outline btn-auto" onclick="printContent('globalAnalysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Exam Analysis')">🖨️ Print</button>
+                <button class="btn btn-sm btn-outline btn-auto" onclick="printContent('globalAnalysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Exam Analysis')">🖨️ Print Chart</button>
+                <button class="btn btn-sm btn-outline btn-auto" onclick="printStudentRankingFromGlobal()">📋 Print Ranking</button>
                 <button class="modal-close" onclick="closeGlobalAnalysisModal()">✕</button>
             </div>
             <h3>📊 Exam Analysis</h3>
