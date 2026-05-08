@@ -54,6 +54,10 @@
                     <button class="btn btn-outline" onclick="navigateTo('register-student')">📝 Register Student</button>
                     <button class="btn btn-outline" onclick="navigateTo('register-teacher')">📋 Register Teacher</button>
                 </div>
+                <!-- Hidden admin link -->
+                <p style="text-align:center; margin-top:16px; font-size:0.75rem; opacity:0.5;">
+                    <a href="#" onclick="navigateTo('admin-verify')" style="color:inherit;">🔐</a>
+                </p>
             </div>
         </div>
 
@@ -86,7 +90,7 @@
             <div class="card wide">
                 <div class="flex-between mb-16">
                     <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout('student')">← Logout</button>
+                        <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout()">← Logout</button>
                         <button class="btn btn-sm btn-outline btn-auto" onclick="printContent('studentResultsPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Keputusan Peperiksaan Keseluruhan')">🖨️ Print</button>
                         <button class="btn btn-sm btn-outline btn-auto" onclick="openProfile()">👤 Profile</button>
                     </div>
@@ -132,7 +136,7 @@
             <div class="card wide">
                 <div class="flex-between mb-16">
                     <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout('teacher')">← Logout</button>
+                        <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout()">← Logout</button>
                         <button class="btn btn-sm btn-outline btn-auto" onclick="openProfile()">👤 Profile</button>
                     </div>
                     <span class="fw-700" id="teacherNameDisplay"></span>
@@ -163,7 +167,7 @@
                 <h2 class="app-title">👨‍🎓 Students in <span id="classNameInline"></span></h2>
                 <p class="app-subtitle">Click "Add/Edit Results" to manage examination scores</p>
                 <div class="text-center mb-16">
-                    <button class="btn btn-sm btn-outline" onclick="printAnalysisWithInfo()" style="width: auto; margin: 0 auto;">
+                    <button class="btn btn-sm btn-outline" onclick="openAnalysisModal()" style="width: auto; margin: 0 auto;">
                         📊 Class Analysis
                     </button>
                 </div>
@@ -178,7 +182,7 @@
             <div class="card">
                 <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
                 <h2 class="app-title">📝 Register Student</h2>
-                <p class="app-subtitle">Create a new student account or update existing</p>
+                <p class="app-subtitle">Step 1: Enter student details</p>
                 <form id="registerStudentForm" onsubmit="return false;">
                     <div class="form-group">
                         <label for="regStudentName">Full Name</label>
@@ -194,11 +198,8 @@
                             <option value="">-- Select Class --</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label for="regStudentPassword">Password</label>
-                        <input type="password" id="regStudentPassword" placeholder="Create a password" required minlength="6">
-                    </div>
-                    <button type="submit" class="btn btn-primary" id="regStudentBtn">💾 Register / Update Student</button>
+                    <!-- No password field – set later -->
+                    <button type="submit" class="btn btn-primary" id="regStudentBtn">📧 Send Verification Code</button>
                 </form>
             </div>
         </div>
@@ -208,7 +209,7 @@
             <div class="card">
                 <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
                 <h2 class="app-title">📋 Register Teacher</h2>
-                <p class="app-subtitle">Create a new teacher account or update existing</p>
+                <p class="app-subtitle">Step 1: Enter teacher details</p>
                 <form id="registerTeacherForm" onsubmit="return false;">
                     <div class="form-group">
                         <label for="regTeacherName">Full Name</label>
@@ -248,11 +249,49 @@
                             <option value="None">None</option>
                         </select>
                     </div>
+                    <!-- No password field -->
+                    <button type="submit" class="btn btn-accent" id="regTeacherBtn">📧 Send Verification Code</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ========== PAGE: Verify Registration ========== -->
+        <div class="page" id="page-verify-registration">
+            <div class="card">
+                <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="cancelVerification()">← Cancel Registration</button>
+                <h2 class="app-title">🔐 Verify Registration</h2>
+                <p class="app-subtitle">A 5‑digit code has been generated.<br>Ask the exam secretary for the code.</p>
+                <div class="countdown-box">
+                    <span class="countdown-label">Time remaining:</span>
+                    <span id="verificationTimer" class="countdown-value">03:00</span>
+                </div>
+                <form id="verifyCodeForm" onsubmit="return false;">
                     <div class="form-group">
-                        <label for="regTeacherPassword">Password</label>
-                        <input type="password" id="regTeacherPassword" placeholder="Create a password" required minlength="6">
+                        <label for="verificationCodeInput">5‑Digit Code</label>
+                        <input type="text" id="verificationCodeInput" placeholder="00000" maxlength="5" pattern="[0-9]{5}" inputmode="numeric" required autocomplete="off">
                     </div>
-                    <button type="submit" class="btn btn-accent" id="regTeacherBtn">💾 Register / Update Teacher</button>
+                    <p class="small-text text-danger" id="verificationError"></p>
+                    <button type="submit" class="btn btn-primary" id="verifyCodeBtn">✅ Verify & Continue</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ========== PAGE: Set Password ========== -->
+        <div class="page" id="page-set-password">
+            <div class="card">
+                <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="cancelSetPassword()">← Cancel</button>
+                <h2 class="app-title">🔒 Set Password</h2>
+                <p class="app-subtitle">Create a password for your new account</p>
+                <form id="setPasswordForm" onsubmit="return false;">
+                    <div class="form-group">
+                        <label for="newPassword1">Password</label>
+                        <input type="password" id="newPassword1" placeholder="Create a password" required minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword2">Confirm Password</label>
+                        <input type="password" id="newPassword2" placeholder="Confirm password" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="setPasswordBtn">🔐 Create Account</button>
                 </form>
             </div>
         </div>
@@ -319,9 +358,22 @@
             </div>
         </div>
 
+        <!-- ========== PAGE: Admin Verification Panel ========== -->
+        <div class="page" id="page-admin-verify">
+            <div class="card wide">
+                <button class="btn btn-sm btn-outline btn-auto mb-16" onclick="navigateTo('main')">← Back</button>
+                <h2 class="app-title">🛡️ Admin Verification Panel</h2>
+                <p class="app-subtitle">Pending registration codes (give to user)</p>
+                <div id="adminCodesList">
+                    <p class="text-center text-light">Loading...</p>
+                </div>
+                <button class="btn btn-outline btn-sm btn-auto mt-16" onclick="loadAdminCodes()">🔄 Refresh</button>
+            </div>
+        </div>
+
     </div>
 
-    <!-- ==================== MODAL: Add/Edit Result ==================== -->
+    <!-- ==================== MODALS (unchanged) ==================== -->
     <div class="modal-overlay" id="resultModalOverlay">
         <div class="modal" id="resultModal">
             <button class="modal-close" onclick="closeResultModal()">✕</button>
@@ -373,7 +425,6 @@
         </div>
     </div>
 
-    <!-- ==================== MODAL: Add/Edit Class ==================== -->
     <div class="modal-overlay" id="addClassModalOverlay">
         <div class="modal" id="addClassModal">
             <button class="modal-close" onclick="closeAddClassModal()">✕</button>
@@ -394,7 +445,6 @@
         </div>
     </div>
 
-    <!-- ==================== MODAL: Set MUET Result ==================== -->
     <div class="modal-overlay" id="muetModalOverlay">
         <div class="modal" id="muetModal">
             <button class="modal-close" onclick="closeMuetModal()">✕</button>
@@ -422,7 +472,6 @@
         </div>
     </div>
 
-    <!-- ==================== MODAL: Reset Password ==================== -->
     <div class="modal-overlay" id="resetPasswordModalOverlay">
         <div class="modal" id="resetPasswordModal">
             <button class="modal-close" onclick="closeResetPasswordModal()">✕</button>
@@ -449,11 +498,10 @@
         </div>
     </div>
 
-    <!-- ==================== MODAL: Exam Analysis (per class) ==================== -->
     <div class="modal-overlay" id="analysisModalOverlay">
         <div class="modal" id="analysisModal" style="max-width: 700px;">
             <div class="modal-header-actions" style="display: flex; gap: 8px; position: absolute; top: 12px; right: 16px;">
-                <button class="btn btn-sm btn-outline btn-auto" onclick="printAnalysisWithInfo()">🖨️ Print</button>
+                <button class="btn btn-sm btn-outline btn-auto" onclick="printContent('analysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Class Analysis')">🖨️ Print</button>
                 <button class="modal-close" onclick="closeAnalysisModal()">✕</button>
             </div>
             <h3 id="analysisModalTitle">📊 Class Exam Analysis</h3>
@@ -480,11 +528,10 @@
         </div>
     </div>
 
-    <!-- ==================== MODAL: Global Exam Analysis ==================== -->
     <div class="modal-overlay" id="globalAnalysisModalOverlay">
         <div class="modal" id="globalAnalysisModal" style="max-width: 700px;">
             <div class="modal-header-actions" style="display: flex; gap: 8px; position: absolute; top: 12px; right: 16px;">
-                <button class="btn btn-sm btn-outline btn-auto" onclick="printGlobalAnalysisWithInfo()">🖨️ Print</button>
+                <button class="btn btn-sm btn-outline btn-auto" onclick="printContent('globalAnalysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Exam Analysis')">🖨️ Print</button>
                 <button class="modal-close" onclick="closeGlobalAnalysisModal()">✕</button>
             </div>
             <h3>📊 Exam Analysis</h3>
@@ -517,7 +564,6 @@
         </div>
     </div>
 
-    <!-- External JavaScript -->
     <script src="app.js"></script>
 </body>
 </html>
