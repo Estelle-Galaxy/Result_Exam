@@ -373,7 +373,7 @@
 
     </div>
 
-    <!-- ==================== MODALS (unchanged) ==================== -->
+    <!-- ==================== MODALS ==================== -->
     <div class="modal-overlay" id="resultModalOverlay">
         <div class="modal" id="resultModal">
             <button class="modal-close" onclick="closeResultModal()">✕</button>
@@ -445,29 +445,43 @@
         </div>
     </div>
 
+    <!-- ========== MUET MODAL (UPDATED – section marks) ========== -->
     <div class="modal-overlay" id="muetModalOverlay">
-        <div class="modal" id="muetModal">
+        <div class="modal" id="muetModal" style="max-width: 550px;">
             <button class="modal-close" onclick="closeMuetModal()">✕</button>
             <h3>Set MUET Result</h3>
             <form id="muetForm" onsubmit="return false;">
                 <input type="hidden" id="muetStudentId">
                 <input type="hidden" id="muetClassName">
-                <div class="form-group">
-                    <label for="muetBand">MUET Band</label>
-                    <select id="muetBand" required>
-                        <option value="">-- Select Band --</option>
-                        <option value="Band 1.0">Band 1</option>
-                        <option value="Band 1.5">Band 1.5</option>
-                        <option value="Band 2.0">Band 2</option>
-                        <option value="Band 2.5">Band 2.5</option>
-                        <option value="Band 3.0">Band 3</option>
-                        <option value="Band 3.5">Band 3.5</option>
-                        <option value="Band 4.0">Band 4</option>
-                        <option value="Band 4.5">Band 4.5</option>
-                        <option value="Band 5.0">Band 5</option>
-                    </select>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="form-group">
+                        <label for="muetListening">Listening (max 90)</label>
+                        <input type="number" id="muetListening" placeholder="0-90" min="0" max="90" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="muetSpeaking">Speaking (max 90)</label>
+                        <input type="number" id="muetSpeaking" placeholder="0-90" min="0" max="90" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="muetReading">Reading (max 90)</label>
+                        <input type="number" id="muetReading" placeholder="0-90" min="0" max="90" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="muetWriting">Writing (max 90)</label>
+                        <input type="number" id="muetWriting" placeholder="0-90" min="0" max="90" required>
+                    </div>
                 </div>
-                <button type="submit" class="btn btn-primary">💾 Save MUET</button>
+
+                <div class="form-group mt-12" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-sm btn-outline btn-auto" onclick="calculateMuetBand()">🧮 Calculate Band</button>
+                    <span style="font-size: 1rem; margin-left: auto;">
+                        Total: <strong id="muetTotalDisplay">--</strong> / 360 &nbsp;&nbsp; 
+                        Band: <strong id="muetBandDisplay">--</strong>
+                    </span>
+                </div>
+
+                <button type="submit" class="btn btn-primary mt-12">💾 Save MUET</button>
             </form>
         </div>
     </div>
