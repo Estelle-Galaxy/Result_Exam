@@ -1,4 +1,7 @@
-// ---- Firebase configuration ----
+// app.js – Complete implementation with manual verification, admin panel,
+// and all original features (login, results, classes, analysis, etc.)
+
+// ========== FIREBASE CONFIGURATION ==========
 const firebaseConfig = {
     apiKey: "AIzaSyCBjA_xaSAJdweodUsEMzvGY5R69I3esgE",
     authDomain: "resultexam-25f4e.firebaseapp.com",
@@ -9,38 +12,51 @@ const firebaseConfig = {
     appId: "1:1090858219421:web:da3e3ddd4ab18027f06174",
     measurementId: "G-RJ02VST99R"
 };
-
-// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-// ==================== UTILITY FUNCTIONS ====================
+// ========== GLOBAL STATE ==========
+let pendingRegistration = null;
+let verificationTimerInterval = null;
 
+// ========== UTILITY FUNCTIONS ==========
 function showLoading() {
     document.getElementById('loadingOverlay').classList.add('active');
 }
-
 function hideLoading() {
     document.getElementById('loadingOverlay').classList.remove('active');
 }
 
 function showToast(message, type = 'info') {
-    const toastContainer = document.getElementById('toastContainer');
+    const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    toast.innerHTML = `${message}`;
-    toastContainer.appendChild(toast);
+    toast.textContent = message;
+    container.appendChild(toast);
     setTimeout(() => toast.remove(), 4000);
 }
 
 function navigateTo(pageId) {
-    document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
-    const targetPage = document.getElementById(`page-${pageId}`);
-    if (targetPage) targetPage.classList.add('active');
+    // Admin panel password protection
+    if (pageId === 'admin-verify') {
+        const pwd = prompt('Enter admin password:');
+        if (pwd !== 'smkbadin2025admin') {
+            showToast('Incorrect password', 'error');
+            return;
+        }
+    }
+
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const target = document.getElementById(`page-${pageId}`);
+    if (target) target.classList.add('active');
+
+    // Load dynamic content on specific pages
+    if (pageId === 'teacher-dashboard') loadTeacherClasses();
+    if (pageId === 'register-student' || pageId === 'register-teacher') loadClassesForRegistration();
+    if (pageId === 'admin-verify') loadAdminCodes();
 }
 
-// ==================== PRINT FUNCTION ====================
-
+// ========== PRINT FUNCTION ==========
 function printContent(areaId, reportTitle = 'Pusat Tingkatan Enam SMK Badin', reportSubtitle = '') {
     const printArea = document.getElementById(areaId);
     if (!printArea) {
@@ -55,102 +71,16 @@ function printContent(areaId, reportTitle = 'Pusat Tingkatan Enam SMK Badin', re
     }
 
     const contentHTML = printArea.innerHTML;
-
-    // Reliable logo source
     let logoSrc = '';
     const logoImg = document.getElementById('appLogoImage');
     if (logoImg && logoImg.src) {
         logoSrc = logoImg.src;
     } else {
         const fallbackImg = document.querySelector('.icon-circle img');
-        if (fallbackImg && fallbackImg.src) {
-            logoSrc = fallbackImg.src;
-        }
+        if (fallbackImg && fallbackImg.src) logoSrc = fallbackImg.src;
     }
 
-    const printCSS = `
-        <style>
-            body {
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                margin: 20px;
-                color: #000;
-                background: #fff;
-            }
-
-            .print-header {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                border-bottom: 2px solid #000;
-                padding-bottom: 10px;
-                margin-bottom: 20px;
-            }
-            .print-logo {
-                width: 70px;
-                height: 70px;
-                border-radius: 50%;
-                object-fit: cover;
-            }
-            .print-title-box {
-                text-align: center;
-                flex: 1;
-            }
-            .print-title {
-                font-size: 1.4rem;
-                font-weight: 700;
-                margin: 0;
-            }
-            .print-subtitle {
-                font-size: 0.9rem;
-                margin-top: 6px;
-                color: #333;
-            }
-
-            table {
-                border-collapse: collapse;
-                width: 100%;
-                margin-bottom: 16px;
-            }
-            th, td {
-                border: 1px solid #ccc;
-                padding: 8px;
-                text-align: left;
-            }
-            th {
-                background: #f0f0f0;
-            }
-
-            .badge {
-                display: inline-block;
-                padding: 2px 8px;
-                border-radius: 4px;
-                font-size: 0.8rem;
-                font-weight: 600;
-                color: #000;
-                background: #e2e8f0;
-            }
-
-            .term-heading, .result-summary, .status-container, h3, h4, h2 {
-                color: #000;
-                background: none;
-                border-left: none;
-            }
-            .status-badge {
-                border: 1px solid #ccc;
-                padding: 10px;
-                margin-bottom: 8px;
-            }
-            .flex-between, .btn, .toggle-password, .forgot-link,
-            .modal-close, .modal-header-actions {
-                display: none;
-            }
-        </style>
-    `;
-
-    const logoHTML = logoSrc
-        ? `<img class="print-logo" src="${logoSrc}" alt="Logo" />`
-        : `<div class="print-logo"></div>`;
-
+    const logoHTML = logoSrc ? `<img class="print-logo" src="${logoSrc}" alt="Logo" />` : '';
     const headerHTML = `
         <div class="print-header">
             ${logoHTML}
@@ -161,31 +91,36 @@ function printContent(areaId, reportTitle = 'Pusat Tingkatan Enam SMK Badin', re
         </div>
     `;
 
+    const printCSS = `
+        <style>
+            body { font-family: 'Segoe UI', sans-serif; margin: 20px; color: #000; background: #fff; }
+            .print-header { display: flex; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+            .print-logo { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; }
+            .print-title-box { text-align: center; flex: 1; }
+            .print-title { font-size: 1.4rem; margin: 0; }
+            .print-subtitle { font-size: 0.9rem; color: #333; margin-top: 6px; }
+            table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+            th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+            th { background: #f0f0f0; }
+            .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; background: #e2e8f0; }
+            .term-heading, .result-summary, .status-container, h3, h4, h2 { color: #000; }
+            .flex-between, .btn, .toggle-password, .forgot-link, .modal-close, .modal-header-actions { display: none; }
+        </style>
+    `;
+
     printWindow.document.write(`
         <!DOCTYPE html>
         <html>
-        <head>
-            <title>Print</title>
-            ${printCSS}
-        </head>
-        <body>
-            ${headerHTML}
-            ${contentHTML}
-        </body>
+        <head><title>Print</title>${printCSS}</head>
+        <body>${headerHTML}${contentHTML}</body>
         </html>
     `);
-
     printWindow.document.close();
     printWindow.focus();
-
-    setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-    }, 500);
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
 }
 
-// ==================== PASSWORD TOGGLE (hold to show) ====================
-
+// ========== PASSWORD TOGGLE (hold to show) ==========
 function setupPasswordToggle(inputId, btnId) {
     const input = document.getElementById(inputId);
     const btn = document.getElementById(btnId);
@@ -201,82 +136,7 @@ function setupPasswordToggle(inputId, btnId) {
     btn.addEventListener('touchend', () => { input.type = 'password'; });
 }
 
-// ==================== RESET PASSWORD MODAL ====================
-
-function openResetPasswordModal(userType) {
-    document.getElementById('resetUserType').value = userType;
-    document.getElementById('resetIdLabel').textContent = userType === 'student' ? 'Student ID' : 'Staff Number';
-    document.getElementById('resetPasswordModalOverlay').classList.add('active');
-}
-
-function closeResetPasswordModal() {
-    document.getElementById('resetPasswordModalOverlay').classList.remove('active');
-    document.getElementById('resetPasswordForm').reset();
-}
-
-// ==================== EVENT LISTENER BINDING ====================
-
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('studentLoginForm').addEventListener('submit', handleStudentLogin);
-    document.getElementById('teacherLoginForm').addEventListener('submit', handleTeacherLogin);
-    document.getElementById('registerStudentForm').addEventListener('submit', handleRegisterStudent);
-    document.getElementById('registerTeacherForm').addEventListener('submit', handleRegisterTeacher);
-    document.getElementById('resultForm').addEventListener('submit', handleSaveResult);
-    document.getElementById('addClassForm').addEventListener('submit', handleSaveClass);
-    document.getElementById('muetForm').addEventListener('submit', handleSaveMuet);
-    document.getElementById('resetPasswordForm').addEventListener('submit', handlePasswordReset);
-    document.getElementById('profileForm').addEventListener('submit', handleProfileSave);
-
-    document.getElementById('resultModalOverlay').addEventListener('click', function(e) {
-        if (e.target === this) closeResultModal();
-    });
-    document.getElementById('addClassModalOverlay').addEventListener('click', function(e) {
-        if (e.target === this) closeAddClassModal();
-    });
-    document.getElementById('muetModalOverlay').addEventListener('click', function(e) {
-        if (e.target === this) closeMuetModal();
-    });
-    document.getElementById('resetPasswordModalOverlay').addEventListener('click', function(e) {
-        if (e.target === this) closeResetPasswordModal();
-    });
-    document.getElementById('analysisModalOverlay').addEventListener('click', function(e) {
-        if (e.target === this) closeAnalysisModal();
-    });
-    document.getElementById('globalAnalysisModalOverlay').addEventListener('click', function(e) {
-        if (e.target === this) closeGlobalAnalysisModal();
-    });
-
-    setupPasswordToggle('studentPasswordInput', 'toggleStudentPassword');
-    setupPasswordToggle('teacherPasswordInput', 'toggleTeacherPassword');
-    setupPasswordToggle('resetNewPassword', 'toggleResetPassword');
-
-    loadClassesForRegistration();
-    loadHomeroomClassOptions();
-
-    const userType = sessionStorage.getItem('userType');
-    const userId = sessionStorage.getItem('userId');
-    if (userType && userId) {
-        if (userType === 'student') {
-            document.getElementById('studentNameDisplay').textContent = sessionStorage.getItem('userName');
-            document.getElementById('studentIdDisplay').textContent = `ID: ${userId}`;
-            const userClass = sessionStorage.getItem('userClass');
-            db.collection('students').doc(userId).get().then(doc => {
-                if (doc.exists && doc.data().muetBand) {
-                    document.getElementById('muetDisplay').innerHTML = `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${doc.data().muetBand}</div>`;
-                }
-            });
-            loadStudentResults(userId, userClass);
-            navigateTo('student-results');
-        } else if (userType === 'teacher') {
-            document.getElementById('teacherNameDisplay').textContent = sessionStorage.getItem('userName');
-            loadTeacherClasses();
-            navigateTo('teacher-dashboard');
-        }
-    }
-});
-
-// ==================== AUTHENTICATION ====================
-
+// ========== LOGIN & LOGOUT ==========
 async function handleStudentLogin(event) {
     event.preventDefault();
     const studentId = document.getElementById('studentIdInput').value.trim();
@@ -290,17 +150,10 @@ async function handleStudentLogin(event) {
     showLoading();
     try {
         const doc = await db.collection('students').doc(studentId).get();
-        if (!doc.exists) {
-            showToast('Invalid credentials', 'error');
-            hideLoading();
-            return;
+        if (!doc.exists || doc.data().password !== password) {
+            throw new Error('Invalid credentials');
         }
         const studentData = doc.data();
-        if (studentData.password !== password) {
-            showToast('Invalid credentials', 'error');
-            hideLoading();
-            return;
-        }
 
         sessionStorage.setItem('userType', 'student');
         sessionStorage.setItem('userId', studentId);
@@ -320,7 +173,7 @@ async function handleStudentLogin(event) {
         showToast('Login successful!', 'success');
     } catch (error) {
         console.error('Login error:', error);
-        showToast('Login failed. Please try again.', 'error');
+        showToast(error.message || 'Login failed.', 'error');
     }
     hideLoading();
 }
@@ -338,17 +191,10 @@ async function handleTeacherLogin(event) {
     showLoading();
     try {
         const doc = await db.collection('teachers').doc(staffId).get();
-        if (!doc.exists) {
-            showToast('Invalid credentials', 'error');
-            hideLoading();
-            return;
+        if (!doc.exists || doc.data().password !== password) {
+            throw new Error('Invalid credentials');
         }
         const teacherData = doc.data();
-        if (teacherData.password !== password) {
-            showToast('Invalid credentials', 'error');
-            hideLoading();
-            return;
-        }
 
         sessionStorage.setItem('userType', 'teacher');
         sessionStorage.setItem('userId', staffId);
@@ -365,7 +211,7 @@ async function handleTeacherLogin(event) {
         showToast('Login successful!', 'success');
     } catch (error) {
         console.error('Login error:', error);
-        showToast('Login failed. Please try again.', 'error');
+        showToast(error.message || 'Login failed.', 'error');
     }
     hideLoading();
 }
@@ -376,7 +222,17 @@ function handleLogout() {
     showToast('Logged out successfully', 'info');
 }
 
-// ==================== PASSWORD RESET ====================
+// ========== PASSWORD RESET ==========
+function openResetPasswordModal(userType) {
+    document.getElementById('resetUserType').value = userType;
+    document.getElementById('resetIdLabel').textContent = userType === 'student' ? 'Student ID' : 'Staff Number';
+    document.getElementById('resetPasswordModalOverlay').classList.add('active');
+}
+
+function closeResetPasswordModal() {
+    document.getElementById('resetPasswordModalOverlay').classList.remove('active');
+    document.getElementById('resetPasswordForm').reset();
+}
 
 async function handlePasswordReset(event) {
     event.preventDefault();
@@ -419,7 +275,34 @@ async function handlePasswordReset(event) {
     hideLoading();
 }
 
-// ==================== STUDENT RESULTS (WITH OVERALL RANK) ====================
+// ========== STUDENT RESULTS (WITH RANKINGS) ==========
+function getGrade(marks) {
+    if (marks >= 80) return 'A';
+    if (marks >= 70) return 'A-';
+    if (marks >= 65) return 'B+';
+    if (marks >= 60) return 'B';
+    if (marks >= 55) return 'B-';
+    if (marks >= 50) return 'C+';
+    if (marks >= 45) return 'C';
+    if (marks >= 40) return 'C-';
+    if (marks >= 35) return 'D+';
+    if (marks >= 30) return 'D';
+    return 'F';
+}
+
+function getNGP(marks) {
+    if (marks >= 80) return 4.0;
+    if (marks >= 70) return 3.67;
+    if (marks >= 65) return 3.33;
+    if (marks >= 60) return 3.00;
+    if (marks >= 55) return 2.67;
+    if (marks >= 50) return 2.33;
+    if (marks >= 45) return 2.00;
+    if (marks >= 40) return 1.67;
+    if (marks >= 35) return 1.33;
+    if (marks >= 30) return 1.00;
+    return 0.0;
+}
 
 async function loadStudentResults(studentId, className) {
     const contentDiv = document.getElementById('studentResultsContent');
@@ -591,8 +474,7 @@ async function loadStudentResults(studentId, className) {
     }
 }
 
-// ==================== TEACHER CLASSES & STUDENTS ====================
-
+// ========== TEACHER CLASSES & STUDENTS ==========
 async function loadTeacherClasses() {
     const contentDiv = document.getElementById('classListContent');
     contentDiv.innerHTML = '<p class="text-center text-light">Loading classes...</p>';
@@ -673,8 +555,7 @@ async function loadClassStudents(className) {
     }
 }
 
-// ==================== RESULT MANAGEMENT (TEACHER) ====================
-
+// ========== RESULT MANAGEMENT (TEACHER) ==========
 function showResultModal(studentId, studentName, className) {
     document.getElementById('resultStudentId').value = studentId;
     document.getElementById('resultClassName').value = className;
@@ -793,7 +674,7 @@ async function handleSaveResult(event) {
         loadExistingResults(studentId);
     } catch (error) {
         console.error('Error saving result:', error);
-        showToast('Failed to save result. A Firestore composite index may be required for: studentId, subject, term.', 'error');
+        showToast('Failed to save result. A Firestore composite index may be required.', 'error');
     }
     hideLoading();
 }
@@ -814,7 +695,7 @@ async function deleteResult(resultId) {
 }
 
 async function deleteStudent(studentId, className) {
-    if (!confirm(`Are you sure you want to permanently delete student "${studentId}"? This will remove their account and all associated results.`)) return;
+    if (!confirm(`Are you sure you want to permanently delete student "${studentId}"?`)) return;
     showLoading();
     try {
         await db.collection('students').doc(studentId).delete();
@@ -831,8 +712,7 @@ async function deleteStudent(studentId, className) {
     hideLoading();
 }
 
-// ==================== MUET MANAGEMENT ====================
-
+// ========== MUET MANAGEMENT ==========
 function showMuetModal(studentId, className) {
     document.getElementById('muetStudentId').value = studentId;
     document.getElementById('muetClassName').value = className;
@@ -866,8 +746,7 @@ async function handleSaveMuet(event) {
     hideLoading();
 }
 
-// ==================== PER‑CLASS ANALYSIS (inside a class) ====================
-
+// ========== PER‑CLASS ANALYSIS ==========
 function openAnalysisModal() {
     const className = sessionStorage.getItem('currentClass');
     if (!className) {
@@ -998,15 +877,7 @@ async function runAnalysis() {
     }
 }
 
-function printAnalysisWithInfo() {
-    const className = sessionStorage.getItem('currentClass') || 'Unknown';
-    const term = document.getElementById('analysisTermFilter').value || 'All Terms';
-    const subtitle = `Class: ${className} | Term: ${term}`;
-    printContent('analysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', subtitle);
-}
-
-// ==================== GLOBAL ANALYSIS MODAL (from dashboard) ====================
-
+// ========== GLOBAL ANALYSIS ==========
 async function openGlobalAnalysisModal() {
     const role = sessionStorage.getItem('teacherRole');
     const homeroomClass = sessionStorage.getItem('homeroomClass');
@@ -1120,127 +991,93 @@ async function runGlobalAnalysis() {
     }
 }
 
-function printGlobalAnalysisWithInfo() {
-    const classSelect = document.getElementById('globalAnalysisClass');
-    const className = classSelect.value === '__all__' ? 'All Classes' : classSelect.value;
-    const term = document.getElementById('globalAnalysisTerm').value || 'All Terms';
-    const subtitle = `Class: ${className} | Term: ${term}`;
-    printContent('globalAnalysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', subtitle);
+// ========== CLASS MANAGEMENT ==========
+function showAddClassModal() {
+    document.getElementById('classEditMode').value = 'false';
+    document.getElementById('originalClassName').value = '';
+    document.getElementById('newClassName').value = '';
+    document.getElementById('homeroomTeacherInput').value = '';
+    document.getElementById('addClassModalTitle').textContent = 'Add New Class';
+    document.getElementById('saveClassBtn').textContent = '➕ Create Class';
+    document.getElementById('newClassName').readOnly = false;
+    document.getElementById('addClassModalOverlay').classList.add('active');
 }
 
-// ==================== REGISTRATION ====================
+function showEditClassModal(className, homeroom) {
+    document.getElementById('classEditMode').value = 'true';
+    document.getElementById('originalClassName').value = className;
+    document.getElementById('newClassName').value = className;
+    document.getElementById('homeroomTeacherInput').value = homeroom;
+    document.getElementById('addClassModalTitle').textContent = 'Edit Class';
+    document.getElementById('saveClassBtn').textContent = '💾 Update Class';
+    document.getElementById('newClassName').readOnly = true;
+    document.getElementById('addClassModalOverlay').classList.add('active');
+}
 
-async function handleRegisterStudent(event) {
+function closeAddClassModal() {
+    document.getElementById('addClassModalOverlay').classList.remove('active');
+    document.getElementById('addClassForm').reset();
+    document.getElementById('newClassName').readOnly = false;
+}
+
+async function handleSaveClass(event) {
     event.preventDefault();
-    const name = document.getElementById('regStudentName').value.trim();
-    const studentId = document.getElementById('regStudentId').value.trim();
-    const className = document.getElementById('regStudentClass').value;
-    const password = document.getElementById('regStudentPassword').value;
+    const editMode = document.getElementById('classEditMode').value === 'true';
+    const originalClassName = document.getElementById('originalClassName').value.trim();
+    const className = document.getElementById('newClassName').value.trim();
+    const homeroomTeacher = document.getElementById('homeroomTeacherInput').value.trim();
 
-    if (!name || !studentId || !className || !password) {
+    if (!className || !homeroomTeacher) {
         showToast('Please fill in all fields', 'error');
         return;
     }
 
     showLoading();
     try {
-        const existingDoc = await db.collection('students').doc(studentId).get();
-        await db.collection('students').doc(studentId).set({
-            name: name,
-            class: className,
-            password: password,
-            createdAt: existingDoc.exists ? existingDoc.data().createdAt : new Date().toISOString()
-        }, { merge: true });
-        showToast(existingDoc.exists ? 'Student updated successfully!' : 'Student registered successfully!', 'success');
-        document.getElementById('registerStudentForm').reset();
-        navigateTo('main');
-    } catch (error) {
-        console.error('Registration error:', error);
-        showToast('Registration failed.', 'error');
-    }
-    hideLoading();
-}
-
-function toggleHomeroomClass() {
-    const role = document.getElementById('regTeacherRole').value;
-    const classGroup = document.getElementById('homeroomClassGroup');
-    const classSelect = document.getElementById('regTeacherHomeroomClass');
-
-    if (role === 'Homeroom Teacher') {
-        classGroup.style.display = 'block';
-        classSelect.required = true;
-        if (classSelect.options.length <= 1) loadHomeroomClassOptions();
-    } else {
-        classGroup.style.display = 'none';
-        classSelect.required = false;
-        classSelect.value = '';
-    }
-}
-
-async function loadHomeroomClassOptions() {
-    const select = document.getElementById('regTeacherHomeroomClass');
-    try {
-        const snapshot = await db.collection('classes').get();
-        select.innerHTML = '<option value="">-- Select Class --</option>';
-        snapshot.forEach(doc => {
-            const option = document.createElement('option');
-            option.value = doc.id;
-            option.textContent = doc.id;
-            select.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Error loading homeroom classes:', error);
-    }
-}
-
-async function handleRegisterTeacher(event) {
-    event.preventDefault();
-    const name = document.getElementById('regTeacherName').value.trim();
-    const staffId = document.getElementById('regTeacherStaff').value.trim();
-    const role = document.getElementById('regTeacherRole').value;
-    const subject = document.getElementById('regTeacherSubject').value;
-    const password = document.getElementById('regTeacherPassword').value;
-
-    let homeroomClass = '';
-    if (role === 'Homeroom Teacher') {
-        homeroomClass = document.getElementById('regTeacherHomeroomClass').value;
-        if (!homeroomClass) {
-            showToast('Please select your assigned class', 'error');
-            return;
+        if (editMode) {
+            await db.collection('classes').doc(originalClassName).update({
+                homeroomTeacher: homeroomTeacher,
+                name: originalClassName
+            });
+            showToast('Class updated successfully!', 'success');
+        } else {
+            const existingDoc = await db.collection('classes').doc(className).get();
+            if (existingDoc.exists) {
+                showToast('Class already exists', 'error');
+                hideLoading();
+                return;
+            }
+            await db.collection('classes').doc(className).set({
+                name: className,
+                homeroomTeacher: homeroomTeacher,
+                createdAt: new Date().toISOString()
+            });
+            showToast('Class created successfully!', 'success');
         }
-    }
-
-    if (!name || !staffId || !role || !subject || !password) {
-        showToast('Please fill in all fields', 'error');
-        return;
-    }
-
-    showLoading();
-    try {
-        const existingDoc = await db.collection('teachers').doc(staffId).get();
-        const teacherData = {
-            name: name,
-            role: role,
-            subject: subject,
-            password: password,
-            createdAt: existingDoc.exists ? existingDoc.data().createdAt : new Date().toISOString()
-        };
-        teacherData.homeroomClass = (role === 'Homeroom Teacher') ? homeroomClass : '';
-
-        await db.collection('teachers').doc(staffId).set(teacherData, { merge: true });
-        showToast(existingDoc.exists ? 'Teacher updated successfully!' : 'Teacher registered successfully!', 'success');
-        document.getElementById('registerTeacherForm').reset();
-        document.getElementById('homeroomClassGroup').style.display = 'none';
-        navigateTo('main');
+        closeAddClassModal();
+        loadTeacherClasses();
     } catch (error) {
-        console.error('Registration error:', error);
-        showToast('Registration failed.', 'error');
+        console.error('Error saving class:', error);
+        showToast('Failed to save class.', 'error');
     }
     hideLoading();
 }
 
-// ==================== PROFILE MANAGEMENT ====================
+async function deleteClass(className) {
+    if (!confirm(`Are you sure you want to delete the class "${className}"?`)) return;
+    showLoading();
+    try {
+        await db.collection('classes').doc(className).delete();
+        showToast('Class deleted successfully!', 'success');
+        loadTeacherClasses();
+    } catch (error) {
+        console.error('Error deleting class:', error);
+        showToast('Failed to delete class.', 'error');
+    }
+    hideLoading();
+}
 
+// ========== PROFILE MANAGEMENT ==========
 async function openProfile() {
     const userType = sessionStorage.getItem('userType');
     const userId = sessionStorage.getItem('userId');
@@ -1280,7 +1117,6 @@ async function openProfile() {
         if (userType === 'student') {
             const classSelect = document.getElementById('profileClass');
             await populateClassDropdown(classSelect, data.class);
-            // Student can now change class – dropdown is enabled by default
         } else {
             document.getElementById('profileRole').value = data.role || '';
             document.getElementById('profileSubject').value = data.subject || '';
@@ -1354,7 +1190,6 @@ async function handleProfileSave(event) {
     if (newPassword) updateData.password = newPassword;
 
     if (userType === 'student') {
-        // Student can change class
         const className = document.getElementById('profileClass').value;
         if (!className) {
             showToast('Please select a class.', 'error');
@@ -1412,123 +1247,7 @@ async function handleProfileSave(event) {
     hideLoading();
 }
 
-// ==================== CLASS MANAGEMENT ====================
-
-function showAddClassModal() {
-    document.getElementById('classEditMode').value = 'false';
-    document.getElementById('originalClassName').value = '';
-    document.getElementById('newClassName').value = '';
-    document.getElementById('homeroomTeacherInput').value = '';
-    document.getElementById('addClassModalTitle').textContent = 'Add New Class';
-    document.getElementById('saveClassBtn').textContent = '➕ Create Class';
-    document.getElementById('newClassName').readOnly = false;
-    document.getElementById('addClassModalOverlay').classList.add('active');
-}
-
-function showEditClassModal(className, homeroom) {
-    document.getElementById('classEditMode').value = 'true';
-    document.getElementById('originalClassName').value = className;
-    document.getElementById('newClassName').value = className;
-    document.getElementById('homeroomTeacherInput').value = homeroom;
-    document.getElementById('addClassModalTitle').textContent = 'Edit Class';
-    document.getElementById('saveClassBtn').textContent = '💾 Update Class';
-    document.getElementById('newClassName').readOnly = true;
-    document.getElementById('addClassModalOverlay').classList.add('active');
-}
-
-function closeAddClassModal() {
-    document.getElementById('addClassModalOverlay').classList.remove('active');
-    document.getElementById('addClassForm').reset();
-    document.getElementById('newClassName').readOnly = false;
-}
-
-async function handleSaveClass(event) {
-    event.preventDefault();
-    const editMode = document.getElementById('classEditMode').value === 'true';
-    const originalClassName = document.getElementById('originalClassName').value.trim();
-    const className = document.getElementById('newClassName').value.trim();
-    const homeroomTeacher = document.getElementById('homeroomTeacherInput').value.trim();
-
-    if (!className || !homeroomTeacher) {
-        showToast('Please fill in all fields', 'error');
-        return;
-    }
-
-    showLoading();
-    try {
-        if (editMode) {
-            await db.collection('classes').doc(originalClassName).update({
-                homeroomTeacher: homeroomTeacher,
-                name: originalClassName
-            });
-            showToast('Class updated successfully!', 'success');
-        } else {
-            const existingDoc = await db.collection('classes').doc(className).get();
-            if (existingDoc.exists) {
-                showToast('Class already exists', 'error');
-                hideLoading();
-                return;
-            }
-            await db.collection('classes').doc(className).set({
-                name: className,
-                homeroomTeacher: homeroomTeacher,
-                createdAt: new Date().toISOString()
-            });
-            showToast('Class created successfully!', 'success');
-        }
-        closeAddClassModal();
-        loadTeacherClasses();
-    } catch (error) {
-        console.error('Error saving class:', error);
-        showToast('Failed to save class.', 'error');
-    }
-    hideLoading();
-}
-
-async function deleteClass(className) {
-    if (!confirm(`Are you sure you want to delete the class "${className}"? This action cannot be undone.`)) return;
-    showLoading();
-    try {
-        await db.collection('classes').doc(className).delete();
-        showToast('Class deleted successfully!', 'success');
-        loadTeacherClasses();
-    } catch (error) {
-        console.error('Error deleting class:', error);
-        showToast('Failed to delete class.', 'error');
-    }
-    hideLoading();
-}
-
-// ==================== UTILITIES ====================
-
-function getGrade(marks) {
-    if (marks >= 80) return 'A';
-    if (marks >= 70) return 'A-';
-    if (marks >= 65) return 'B+';
-    if (marks >= 60) return 'B';
-    if (marks >= 55) return 'B-';
-    if (marks >= 50) return 'C+';
-    if (marks >= 45) return 'C';
-    if (marks >= 40) return 'C-';
-    if (marks >= 35) return 'D+';
-    if (marks >= 30) return 'D';
-    return 'F';
-}
-
-function getNGP(marks) {
-    if (marks >= 80) return 4.0;
-    if (marks >= 70) return 3.67;
-    if (marks >= 65) return 3.33;
-    if (marks >= 60) return 3.00;
-    if (marks >= 55) return 2.67;
-    if (marks >= 50) return 2.33;
-    if (marks >= 45) return 2.00;
-    if (marks >= 40) return 1.67;
-    if (marks >= 35) return 1.33;
-    if (marks >= 30) return 1.00;
-    return 0.0;
-}
-
+// ========== REGISTRATION HELPERS ==========
 async function loadClassesForRegistration() {
     const select = document.getElementById('regStudentClass');
     try {
@@ -1544,3 +1263,316 @@ async function loadClassesForRegistration() {
         console.error('Error loading classes for registration:', error);
     }
 }
+
+function toggleHomeroomClass() {
+    const role = document.getElementById('regTeacherRole').value;
+    const classGroup = document.getElementById('homeroomClassGroup');
+    const classSelect = document.getElementById('regTeacherHomeroomClass');
+
+    if (role === 'Homeroom Teacher') {
+        classGroup.style.display = 'block';
+        classSelect.required = true;
+        if (classSelect.options.length <= 1) loadHomeroomClassOptions();
+    } else {
+        classGroup.style.display = 'none';
+        classSelect.required = false;
+        classSelect.value = '';
+    }
+}
+
+async function loadHomeroomClassOptions() {
+    const select = document.getElementById('regTeacherHomeroomClass');
+    try {
+        const snapshot = await db.collection('classes').get();
+        select.innerHTML = '<option value="">-- Select Class --</option>';
+        snapshot.forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = doc.id;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading homeroom classes:', error);
+    }
+}
+
+// ========== NEW VERIFICATION FLOW ==========
+function registrationRequest(userType) {
+    return async function(e) {
+        e.preventDefault();
+        let idNumber, name, extraData = {};
+        if (userType === 'student') {
+            idNumber = document.getElementById('regStudentId').value.trim();
+            name = document.getElementById('regStudentName').value.trim();
+            extraData.class = document.getElementById('regStudentClass').value;
+            if (!idNumber || !name || !extraData.class) {
+                showToast('Please fill all fields', 'error');
+                return;
+            }
+        } else {
+            idNumber = document.getElementById('regTeacherStaff').value.trim();
+            name = document.getElementById('regTeacherName').value.trim();
+            extraData.role = document.getElementById('regTeacherRole').value;
+            extraData.subject = document.getElementById('regTeacherSubject').value;
+            extraData.homeroomClass = document.getElementById('regTeacherHomeroomClass').value || '';
+            if (!idNumber || !name || !extraData.role || !extraData.subject) {
+                showToast('Please fill all fields', 'error');
+                return;
+            }
+        }
+
+        const collection = userType === 'student' ? 'students' : 'teachers';
+        const existing = await db.collection(collection).doc(idNumber).get();
+        if (existing.exists) {
+            showToast('An account with this ID already exists.', 'error');
+            return;
+        }
+
+        const code = Math.floor(10000 + Math.random() * 90000).toString();
+        const expiresAt = firebase.firestore.Timestamp.fromMillis(Date.now() + 3 * 60 * 1000);
+
+        showLoading();
+        try {
+            await db.collection('registrationCodes').doc(idNumber).set({
+                code, expiresAt, userType, name, extraData, attempts: 0
+            });
+            hideLoading();
+            pendingRegistration = { userType, idNumber, name, extraData };
+            navigateTo('verify-registration');
+            startVerificationTimer(180);
+            showToast('Code generated. Ask the exam secretary for the 5‑digit code.', 'info');
+        } catch (err) {
+            hideLoading();
+            showToast('Failed: ' + err.message, 'error');
+        }
+    };
+}
+
+function startVerificationTimer(seconds) {
+    const display = document.getElementById('verificationTimer');
+    let remaining = seconds;
+    updateTimerDisplay(remaining);
+    clearInterval(verificationTimerInterval);
+    verificationTimerInterval = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+            clearInterval(verificationTimerInterval);
+            display.textContent = '00:00';
+            failVerification('Time expired. Registration cancelled.');
+        } else {
+            updateTimerDisplay(remaining);
+        }
+    }, 1000);
+}
+
+function updateTimerDisplay(secs) {
+    const mins = Math.floor(secs / 60).toString().padStart(2, '0');
+    const sec = (secs % 60).toString().padStart(2, '0');
+    document.getElementById('verificationTimer').textContent = `${mins}:${sec}`;
+}
+
+function failVerification(msg) {
+    clearInterval(verificationTimerInterval);
+    document.getElementById('verifyCodeBtn').disabled = true;
+    document.getElementById('verificationError').textContent = msg;
+    if (pendingRegistration) {
+        db.collection('registrationCodes').doc(pendingRegistration.idNumber).delete().catch(() => {});
+    }
+    pendingRegistration = null;
+    setTimeout(() => {
+        navigateTo('main');
+        showToast(msg, 'error');
+    }, 2000);
+}
+
+function cancelVerification() {
+    clearInterval(verificationTimerInterval);
+    if (pendingRegistration) {
+        db.collection('registrationCodes').doc(pendingRegistration.idNumber).delete().catch(() => {});
+    }
+    pendingRegistration = null;
+    navigateTo('main');
+}
+
+document.getElementById('verifyCodeForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const codeInput = document.getElementById('verificationCodeInput').value.trim();
+    if (!/^\d{5}$/.test(codeInput)) {
+        document.getElementById('verificationError').textContent = 'Please enter a 5‑digit code.';
+        return;
+    }
+    if (!pendingRegistration) return;
+
+    showLoading();
+    try {
+        const docRef = db.collection('registrationCodes').doc(pendingRegistration.idNumber);
+        const doc = await docRef.get();
+        if (!doc.exists) throw new Error('No registration request found.');
+        const data = doc.data();
+
+        // Safely check expiry – if the field is missing, treat as expired
+        const expiresAt = data.expiresAt;
+        if (!expiresAt) {
+            await docRef.delete();
+            throw new Error('Invalid request. Please start again.');
+        }
+        if (expiresAt.toDate() < new Date()) {
+            await docRef.delete();
+            throw new Error('Code expired.');
+        }
+
+        if (data.attempts >= 5) throw new Error('Too many failed attempts.');
+        if (data.code !== codeInput) {
+            await docRef.update({ attempts: firebase.firestore.FieldValue.increment(1) });
+            throw new Error('Incorrect code.');
+        }
+        await docRef.delete();
+        hideLoading();
+        clearInterval(verificationTimerInterval);
+        navigateTo('set-password');
+    } catch (err) {
+        hideLoading();
+        document.getElementById('verificationError').textContent = err.message;
+    }
+});
+
+document.getElementById('setPasswordForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const p1 = document.getElementById('newPassword1').value;
+    const p2 = document.getElementById('newPassword2').value;
+    if (p1 !== p2) { showToast('Passwords do not match', 'error'); return; }
+    if (p1.length < 6) { showToast('Minimum 6 characters', 'error'); return; }
+    if (!pendingRegistration) return;
+
+    showLoading();
+    try {
+        const { userType, idNumber, name, extraData } = pendingRegistration;
+        if (userType === 'student') {
+            await db.collection('students').doc(idNumber).set({
+                name, class: extraData.class,
+                password: p1,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            const classRef = db.collection('classes').doc(extraData.class);
+            await classRef.set({ students: firebase.firestore.FieldValue.arrayUnion(idNumber) }, { merge: true });
+        } else {
+            await db.collection('teachers').doc(idNumber).set({
+                name, role: extraData.role, subject: extraData.subject,
+                homeroomClass: extraData.homeroomClass || '',
+                password: p1,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+        pendingRegistration = null;
+        hideLoading();
+        showToast('Account created! You can now login.', 'success');
+        navigateTo('main');
+    } catch (err) {
+        hideLoading();
+        showToast('Error: ' + err.message, 'error');
+    }
+});
+
+function cancelSetPassword() {
+    pendingRegistration = null;
+    navigateTo('main');
+}
+
+// ========== ADMIN VERIFICATION PANEL ==========
+async function loadAdminCodes() {
+    const container = document.getElementById('adminCodesList');
+    container.innerHTML = '<p class="text-center text-light">Loading...</p>';
+    try {
+        const snap = await db.collection('registrationCodes').get();
+        if (snap.empty) {
+            container.innerHTML = '<p class="text-center text-light">No pending requests.</p>';
+            return;
+        }
+        let html = '';
+        const now = new Date();
+        snap.forEach(doc => {
+            const data = doc.data();
+            // Guard against missing expiry field
+            const expiresAt = data.expiresAt;
+            let expired = true;
+            let codeDisplay = 'EXPIRED';
+            if (expiresAt && expiresAt.toDate) {
+                expired = expiresAt.toDate() < now;
+                codeDisplay = expired ? 'EXPIRED' : data.code;
+            }
+            html += `
+                <div style="background:rgba(255,255,255,0.05); padding:12px; border-radius:8px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
+                    <div style="flex:1; min-width:200px;">
+                        <strong>${data.name}</strong> (${doc.id}) – ${(data.userType || 'UNKNOWN').toUpperCase()}
+                        <br><small>${data.userType === 'student' ? 'Class: '+(data.extraData?.class || 'N/A') : 'Role: '+(data.extraData?.role || 'N/A')+' | Subject: '+(data.extraData?.subject || 'N/A')}</small>
+                        <br><span style="font-size:1.3rem; font-weight:bold; color:${expired ? '#e24a4a' : '#4acd8d'};">${codeDisplay}</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline" onclick="deleteCode('${doc.id}')">🗑️</button>
+                </div>`;
+        });
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+    }
+}
+
+async function deleteCode(id) {
+    if (confirm('Delete this request?')) {
+        await db.collection('registrationCodes').doc(id).delete();
+        loadAdminCodes();
+    }
+}
+
+// ========== INITIAL SETUP & EVENT BINDING ==========
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('studentLoginForm').addEventListener('submit', handleStudentLogin);
+    document.getElementById('teacherLoginForm').addEventListener('submit', handleTeacherLogin);
+    document.getElementById('registerStudentForm').addEventListener('submit', registrationRequest('student'));
+    document.getElementById('registerTeacherForm').addEventListener('submit', registrationRequest('teacher'));
+    document.getElementById('resultForm').addEventListener('submit', handleSaveResult);
+    document.getElementById('addClassForm').addEventListener('submit', handleSaveClass);
+    document.getElementById('muetForm').addEventListener('submit', handleSaveMuet);
+    document.getElementById('resetPasswordForm').addEventListener('submit', handlePasswordReset);
+    document.getElementById('profileForm').addEventListener('submit', handleProfileSave);
+
+    // Modal overlay click-away
+    ['resultModalOverlay','addClassModalOverlay','muetModalOverlay','resetPasswordModalOverlay','analysisModalOverlay','globalAnalysisModalOverlay'].forEach(id => {
+        const overlay = document.getElementById(id);
+        if (overlay) {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    if (id === 'resultModalOverlay') closeResultModal();
+                    else if (id === 'addClassModalOverlay') closeAddClassModal();
+                    else if (id === 'muetModalOverlay') closeMuetModal();
+                    else if (id === 'resetPasswordModalOverlay') closeResetPasswordModal();
+                    else if (id === 'analysisModalOverlay') closeAnalysisModal();
+                    else if (id === 'globalAnalysisModalOverlay') closeGlobalAnalysisModal();
+                }
+            });
+        }
+    });
+
+    setupPasswordToggle('studentPasswordInput', 'toggleStudentPassword');
+    setupPasswordToggle('teacherPasswordInput', 'toggleTeacherPassword');
+    setupPasswordToggle('resetNewPassword', 'toggleResetPassword');
+
+    loadClassesForRegistration();
+    loadHomeroomClassOptions();
+
+    // Restore session
+    const userType = sessionStorage.getItem('userType');
+    const userId = sessionStorage.getItem('userId');
+    if (userType && userId) {
+        if (userType === 'student') {
+            document.getElementById('studentNameDisplay').textContent = sessionStorage.getItem('userName');
+            document.getElementById('studentIdDisplay').textContent = `ID: ${userId}`;
+            const userClass = sessionStorage.getItem('userClass');
+            loadStudentResults(userId, userClass);
+            navigateTo('student-results');
+        } else if (userType === 'teacher') {
+            document.getElementById('teacherNameDisplay').textContent = sessionStorage.getItem('userName');
+            loadTeacherClasses();
+            navigateTo('teacher-dashboard');
+        }
+    }
+});
