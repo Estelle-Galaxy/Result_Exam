@@ -746,13 +746,19 @@ async function deleteStudent(studentId, className) {
     hideLoading();
 }
 
-// ========== MUET MANAGEMENT (NEW: section marks) ==========
+// ========== MUET MANAGEMENT (supports partial saves) ==========
 
 function showMuetModal(studentId, className) {
     document.getElementById('muetStudentId').value = studentId;
     document.getElementById('muetClassName').value = className;
 
-    // Reset fields
+    // Remove required attributes from all MUET mark fields
+    ['muetListening', 'muetSpeaking', 'muetReading', 'muetWriting'].forEach(id => {
+        const field = document.getElementById(id);
+        if (field) field.removeAttribute('required');
+    });
+
+    // Clear fields
     document.getElementById('muetListening').value = '';
     document.getElementById('muetSpeaking').value = '';
     document.getElementById('muetReading').value = '';
@@ -760,9 +766,7 @@ function showMuetModal(studentId, className) {
     document.getElementById('muetTotalDisplay').textContent = '--';
     document.getElementById('muetBandDisplay').textContent = '--';
 
-    // Load existing MUET data if any
     loadExistingMuet(studentId);
-
     document.getElementById('muetModalOverlay').classList.add('active');
 }
 
@@ -771,7 +775,6 @@ function closeMuetModal() {
     document.getElementById('muetForm').reset();
 }
 
-// Load existing MUET data to populate the fields
 async function loadExistingMuet(studentId) {
     try {
         const doc = await db.collection('students').doc(studentId).get();
@@ -779,10 +782,18 @@ async function loadExistingMuet(studentId) {
             const data = doc.data();
             if (data.muet) {
                 document.getElementById('muetListening').value = data.muet.listening ?? '';
-                document.getElementById('muetSpeaking').value = data.muet.speaking ?? '';
-                document.getElementById('muetReading').value = data.muet.reading ?? '';
-                document.getElementById('muetWriting').value = data.muet.writing ?? '';
-                calculateMuetBand(); // auto-calculate from loaded marks
+                document.getElementById('muetSpeaking').value  = data.muet.speaking  ?? '';
+                document.getElementById('muetReading').value   = data.muet.reading   ?? '';
+                document.getElementById('muetWriting').value   = data.muet.writing   ?? '';
+                calculateMuetBand();
+            } else {
+                // Clear everything
+                document.getElementById('muetListening').value = '';
+                document.getElementById('muetSpeaking').value  = '';
+                document.getElementById('muetReading').value   = '';
+                document.getElementById('muetWriting').value   = '';
+                document.getElementById('muetTotalDisplay').textContent = '--';
+                document.getElementById('muetBandDisplay').textContent = '--';
             }
         }
     } catch (err) {
@@ -790,12 +801,28 @@ async function loadExistingMuet(studentId) {
     }
 }
 
-// Calculate total and band from section marks
 function calculateMuetBand() {
-    const listening = parseInt(document.getElementById('muetListening').value) || 0;
-    const speaking = parseInt(document.getElementById('muetSpeaking').value) || 0;
-    const reading = parseInt(document.getElementById('muetReading').value) || 0;
-    const writing = parseInt(document.getElementById('muetWriting').value) || 0;
+    const listeningVal = document.getElementById('muetListening').value.trim();
+    const speakingVal  = document.getElementById('muetSpeaking').value.trim();
+    const readingVal   = document.getElementById('muetReading').value.trim();
+    const writingVal   = document.getElementById('muetWriting').value.trim();
+
+    if (!listeningVal || !speakingVal || !readingVal || !writingVal) {
+        document.getElementById('muetTotalDisplay').textContent = '--';
+        document.getElementById('muetBandDisplay').textContent = '--';
+        return null;
+    }
+
+    const listening = parseInt(listeningVal);
+    const speaking  = parseInt(speakingVal);
+    const reading   = parseInt(readingVal);
+    const writing   = parseInt(writingVal);
+
+    if (isNaN(listening) || isNaN(speaking) || isNaN(reading) || isNaN(writing)) {
+        document.getElementById('muetTotalDisplay').textContent = '--';
+        document.getElementById('muetBandDisplay').textContent = '--';
+        return null;
+    }
 
     const total = listening + speaking + reading + writing;
     document.getElementById('muetTotalDisplay').textContent = total;
@@ -816,42 +843,63 @@ function calculateMuetBand() {
     return { total, band };
 }
 
-// Save the MUET record to Firestore
 async function handleSaveMuet(event) {
     event.preventDefault();
     const studentId = document.getElementById('muetStudentId').value;
-    const listening = parseInt(document.getElementById('muetListening').value);
-    const speaking = parseInt(document.getElementById('muetSpeaking').value);
-    const reading = parseInt(document.getElementById('muetReading').value);
-    const writing = parseInt(document.getElementById('muetWriting').value);
+    const listeningRaw = document.getElementById('muetListening').value.trim();
+    const speakingRaw  = document.getElementById('muetSpeaking').value.trim();
+    const readingRaw   = document.getElementById('muetReading').value.trim();
+    const writingRaw   = document.getElementById('muetWriting').value.trim();
 
-    if (isNaN(listening) || isNaN(speaking) || isNaN(reading) || isNaN(writing)) {
-        showToast('Please enter all marks', 'error');
-        return;
-    }
+    const parseField = (value) => {
+        if (value === '') return null;
+        const num = parseInt(value);
+        return isNaN(num) ? null : num;
+    };
 
-    const { total, band } = calculateMuetBand();
-    if (band === 'Invalid Marks') {
-        showToast('Total marks out of range (40–300)', 'error');
-        return;
+    const listening = parseField(listeningRaw);
+    const speaking  = parseField(speakingRaw);
+    const reading   = parseField(readingRaw);
+    const writing   = parseField(writingRaw);
+
+    const muetData = {};
+    if (listening !== null) muetData.listening = listening;
+    if (speaking  !== null) muetData.speaking  = speaking;
+    if (reading   !== null) muetData.reading   = reading;
+    if (writing   !== null) muetData.writing   = writing;
+
+    // Compute total & band only when all four are present
+    if (listening !== null && speaking !== null && reading !== null && writing !== null) {
+        const total = listening + speaking + reading + writing;
+        let band = null;
+        if (total >= 331 && total <= 360) band = '5+';
+        else if (total >= 294 && total <= 330) band = 'Band 5.0';
+        else if (total >= 258 && total <= 293) band = 'Band 4.5';
+        else if (total >= 211 && total <= 257) band = 'Band 4.0';
+        else if (total >= 164 && total <= 210) band = 'Band 3.5';
+        else if (total >= 123 && total <= 163) band = 'Band 3.0';
+        else if (total >= 82 && total <= 122) band = 'Band 2.5';
+        else if (total >= 26 && total <= 81) band = 'Band 2.0';
+        else if (total >= 1 && total <= 25) band = 'Band 1.0';
+
+        if (band && total >= 1 && total <= 360) {
+            muetData.total = total;
+            muetData.band = band;
+        }
     }
 
     showLoading();
     try {
-        // Save as a map (muet object) + also keep a simple band string for quick display
-        await db.collection('students').doc(studentId).update({
-            muetBand: band,               // for old compatibility
-            muet: {
-                listening: listening,
-                speaking: speaking,
-                reading: reading,
-                writing: writing,
-                total: total,
-                band: band
-            }
-        });
+        const updateObj = { muet: muetData };
+        if (muetData.band) {
+            updateObj.muetBand = muetData.band;
+        } else {
+            updateObj.muetBand = '';  // clear old band if incomplete
+        }
+
+        await db.collection('students').doc(studentId).update(updateObj);
         showToast('MUET result saved!', 'success');
-        closeMuetModal();
+        closeMuetModal();  // This now works
     } catch (error) {
         console.error('Error saving MUET:', error);
         showToast('Failed to save MUET result.', 'error');
@@ -1617,7 +1665,7 @@ document.getElementById('verifyCodeForm').addEventListener('submit', async (e) =
         navigateTo('set-password');
     } catch (err) {
         hideLoading();
-        document.getElementById('verificationError').textContent = err.message;
+        document.getElementById('muetForm').setAttribute('novalidate', '');
     }
 });
 
