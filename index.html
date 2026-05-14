@@ -376,7 +376,7 @@
     <!-- ==================== MODALS ==================== -->
     <div class="modal-overlay" id="resultModalOverlay">
         <div class="modal" id="resultModal">
-            <button class="modal-close" onclick="closeResultModal()">✕</button>
+            <button type="button" class="modal-close" onclick="closeResultModal()">✕</button>
             <h3 id="resultModalTitle">Add / Edit Result</h3>
             <form id="resultForm" onsubmit="return false;">
                 <input type="hidden" id="resultStudentId">
@@ -427,7 +427,7 @@
 
     <div class="modal-overlay" id="addClassModalOverlay">
         <div class="modal" id="addClassModal">
-            <button class="modal-close" onclick="closeAddClassModal()">✕</button>
+            <button type="button" class="modal-close" onclick="closeAddClassModal()">✕</button>
             <h3 id="addClassModalTitle">Add New Class</h3>
             <form id="addClassForm" onsubmit="return false;">
                 <input type="hidden" id="classEditMode" value="false">
@@ -445,31 +445,31 @@
         </div>
     </div>
 
-    <!-- ========== MUET MODAL (UPDATED – section marks) ========== -->
+    <!-- ========== MUET MODAL (FIXED – partial saves enabled) ========== -->
     <div class="modal-overlay" id="muetModalOverlay">
         <div class="modal" id="muetModal" style="max-width: 550px;">
-            <button class="modal-close" onclick="closeMuetModal()">✕</button>
+            <button type="button" class="modal-close" onclick="closeMuetModal()">✕</button>
             <h3>Set MUET Result</h3>
-            <form id="muetForm" onsubmit="return false;">
+            <form id="muetForm" onsubmit="return false;" novalidate>
                 <input type="hidden" id="muetStudentId">
                 <input type="hidden" id="muetClassName">
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                     <div class="form-group">
                         <label for="muetListening">Listening (max 90)</label>
-                        <input type="number" id="muetListening" placeholder="0-90" min="0" max="90" required>
+                        <input type="number" id="muetListening" placeholder="0-90" min="0" max="90">
                     </div>
                     <div class="form-group">
                         <label for="muetSpeaking">Speaking (max 90)</label>
-                        <input type="number" id="muetSpeaking" placeholder="0-90" min="0" max="90" required>
+                        <input type="number" id="muetSpeaking" placeholder="0-90" min="0" max="90">
                     </div>
                     <div class="form-group">
                         <label for="muetReading">Reading (max 90)</label>
-                        <input type="number" id="muetReading" placeholder="0-90" min="0" max="90" required>
+                        <input type="number" id="muetReading" placeholder="0-90" min="0" max="90">
                     </div>
                     <div class="form-group">
                         <label for="muetWriting">Writing (max 90)</label>
-                        <input type="number" id="muetWriting" placeholder="0-90" min="0" max="90" required>
+                        <input type="number" id="muetWriting" placeholder="0-90" min="0" max="90">
                     </div>
                 </div>
 
@@ -488,7 +488,7 @@
 
     <div class="modal-overlay" id="resetPasswordModalOverlay">
         <div class="modal" id="resetPasswordModal">
-            <button class="modal-close" onclick="closeResetPasswordModal()">✕</button>
+            <button type="button" class="modal-close" onclick="closeResetPasswordModal()">✕</button>
             <h3>Reset Password</h3>
             <form id="resetPasswordForm" onsubmit="return false;">
                 <input type="hidden" id="resetUserType" value="">
@@ -512,13 +512,13 @@
         </div>
     </div>
 
-    <!-- ========== CLASS ANALYSIS MODAL (with Print Ranking button) ========== -->
+    <!-- ========== CLASS ANALYSIS MODAL ========== -->
     <div class="modal-overlay" id="analysisModalOverlay">
         <div class="modal" id="analysisModal" style="max-width: 700px;">
             <div class="modal-header-actions" style="display: flex; gap: 8px; position: absolute; top: 12px; right: 16px;">
-                <button class="btn btn-sm btn-outline btn-auto" onclick="printContent('analysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Class Analysis')">🖨️ Print Chart</button>
-                <button class="btn btn-sm btn-outline btn-auto" onclick="printStudentRankingFromClass()">📋 Print Ranking</button>
-                <button class="modal-close" onclick="closeAnalysisModal()">✕</button>
+                <button type="button" class="btn btn-sm btn-outline btn-auto" onclick="printContent('analysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Class Analysis')">🖨️ Print Chart</button>
+                <button type="button" class="btn btn-sm btn-outline btn-auto" onclick="printStudentRankingFromClass()">📋 Print Ranking</button>
+                <button type="button" class="modal-close" onclick="closeAnalysisModal()">✕</button>
             </div>
             <h3 id="analysisModalTitle">📊 Class Exam Analysis</h3>
             <div class="form-group" id="analysisTermFilterGroup">
@@ -544,13 +544,13 @@
         </div>
     </div>
 
-    <!-- ========== GLOBAL ANALYSIS MODAL (with Print Ranking button) ========== -->
+    <!-- ========== GLOBAL ANALYSIS MODAL ========== -->
     <div class="modal-overlay" id="globalAnalysisModalOverlay">
         <div class="modal" id="globalAnalysisModal" style="max-width: 700px;">
             <div class="modal-header-actions" style="display: flex; gap: 8px; position: absolute; top: 12px; right: 16px;">
-                <button class="btn btn-sm btn-outline btn-auto" onclick="printContent('globalAnalysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Exam Analysis')">🖨️ Print Chart</button>
-                <button class="btn btn-sm btn-outline btn-auto" onclick="printStudentRankingFromGlobal()">📋 Print Ranking</button>
-                <button class="modal-close" onclick="closeGlobalAnalysisModal()">✕</button>
+                <button type="button" class="btn btn-sm btn-outline btn-auto" onclick="printContent('globalAnalysisPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Exam Analysis')">🖨️ Print Chart</button>
+                <button type="button" class="btn btn-sm btn-outline btn-auto" onclick="printStudentRankingFromGlobal()">📋 Print Ranking</button>
+                <button type="button" class="modal-close" onclick="closeGlobalAnalysisModal()">✕</button>
             </div>
             <h3>📊 Exam Analysis</h3>
             <div class="form-group">
