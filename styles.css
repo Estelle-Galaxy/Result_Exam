@@ -559,3 +559,15 @@ tr:last-child td {
   color: #4a90e2;
   letter-spacing: 2px;
 }
+
+/* When the dropdown is open, the options inside will have black text on a white background */
+#studentPrintTermFilter option {
+  color: #000000;          /* black text for readability */
+  background-color: #ffffff;
+}
+
+/* Optional: change the hover background for clarity */
+#studentPrintTermFilter option:hover {
+  background-color: #e2e8f0;  /* light grey highlight */
+  color: #000000;
+}
