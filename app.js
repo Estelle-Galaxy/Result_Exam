@@ -1,5 +1,7 @@
 // app.js – Complete system with OTP verification, admin panel, per‑subject grade distribution analysis,
-// new MUET section marks, and student details in printed slip.
+// new MUET section marks, student details in printed slip, filtered student printing,
+// teacher analysis student data with class/overall ranks, individual exam slip with rankings,
+// and student ranking displayed in printable results.
 
 // ========== FIREBASE CONFIGURATION ==========
 const firebaseConfig = {
@@ -16,8 +18,10 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 // ========== GLOBAL STATE ==========
-let pendingRegistration = null;        // { userType, idNumber, name, extraData }
+let pendingRegistration = null;
 let verificationTimerInterval = null;
+let allStudentResults = [];               // stores all results of logged‑in student
+let studentRankingHTML = '';             // stores the ranking blocks for printing
 
 // ========== UTILITY FUNCTIONS ==========
 function showLoading() {
@@ -37,7 +41,6 @@ function showToast(message, type = 'info') {
 }
 
 function navigateTo(pageId) {
-    // Admin panel password protection
     if (pageId === 'admin-verify') {
         const pwd = prompt('Enter admin password:');
         if (pwd !== 'smkbadin2025admin') {
@@ -50,7 +53,6 @@ function navigateTo(pageId) {
     const target = document.getElementById(`page-${pageId}`);
     if (target) target.classList.add('active');
 
-    // Load dynamic content on specific pages
     if (pageId === 'teacher-dashboard') loadTeacherClasses();
     if (pageId === 'register-student' || pageId === 'register-teacher') loadClassesForRegistration();
     if (pageId === 'admin-verify') loadAdminCodes();
@@ -82,7 +84,6 @@ function printContent(areaId, reportTitle = 'Pusat Tingkatan Enam SMK Badin', re
 
     const logoHTML = logoSrc ? `<img class="print-logo" src="${logoSrc}" alt="Logo" />` : '';
 
-    // Build school header
     let headerHTML = `
         <div class="print-header">
             ${logoHTML}
@@ -93,7 +94,6 @@ function printContent(areaId, reportTitle = 'Pusat Tingkatan Enam SMK Badin', re
         </div>
     `;
 
-    // If printing student results, include student details
     if (areaId === 'studentResultsPrintArea') {
         const userName = sessionStorage.getItem('userName') || '';
         const userId = sessionStorage.getItem('userId') || '';
@@ -181,7 +181,6 @@ async function handleStudentLogin(event) {
         document.getElementById('studentNameDisplay').textContent = studentData.name;
         document.getElementById('studentIdDisplay').textContent = `ID: ${studentId} | Class: ${studentData.class}`;
 
-        // MUET display handled in loadStudentResults, so we clear it first
         document.getElementById('muetDisplay').innerHTML = '';
         await loadStudentResults(studentId, studentData.class);
         navigateTo('student-results');
@@ -319,15 +318,72 @@ function getNGP(marks) {
     return 0.0;
 }
 
+// Helper to build the result tables (without ranking) – used for filtered print
+function buildResultsHTML(results) {
+    if (!results || results.length === 0) return '<p class="text-center text-light">No results found.</p>';
+
+    const grouped = {};
+    results.forEach(r => {
+        if (!grouped[r.term]) grouped[r.term] = [];
+        grouped[r.term].push(r);
+    });
+
+    let html = '';
+    for (const [term, termResults] of Object.entries(grouped)) {
+        html += `
+        <div class="mb-24">
+            <h3 class="term-heading">${term}</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr><th>Subject</th><th>Percentage (%)</th><th>Grade</th><th>NGP</th></tr></thead>
+                    <tbody>`;
+        termResults.forEach(r => {
+            const grade = getGrade(r.marks);
+            const ngp = getNGP(r.marks);
+            html += `<tr>
+                <td>${r.subject}</td>
+                <td>${r.marks}</td>
+                <td><span class="badge badge-${grade.toLowerCase().replace(/[^a-z]/g, '')}">${grade}</span></td>
+                <td>${ngp.toFixed(2)}</td>
+            </tr>`;
+        });
+        html += `</tbody></table></div></div>`;
+    }
+    return html;
+}
+
+// ========== FILTERED STUDENT PRINTING ==========
+function filterStudentResultsView() {
+    const term = document.getElementById('studentPrintTermFilter').value;
+    if (!allStudentResults.length) return;
+    const filtered = term ? allStudentResults.filter(r => r.term === term) : allStudentResults;
+    document.getElementById('studentResultsContent').innerHTML = buildResultsHTML(filtered) + studentRankingHTML;
+}
+
+function printFilteredStudentResults() {
+    const term = document.getElementById('studentPrintTermFilter').value;
+    const printArea = document.getElementById('studentResultsPrintArea');
+    if (!printArea) return;
+
+    const filtered = term ? allStudentResults.filter(r => r.term === term) : allStudentResults;
+    const originalHTML = printArea.innerHTML;
+    printArea.innerHTML = buildResultsHTML(filtered) + studentRankingHTML;
+    printContent('studentResultsPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Keputusan Peperiksaan Keseluruhan');
+    printArea.innerHTML = originalHTML;
+}
+
 async function loadStudentResults(studentId, className) {
     const contentDiv = document.getElementById('studentResultsContent');
     contentDiv.innerHTML = '<p class="text-center text-light">Loading results...</p>';
 
     try {
         const ownSnap = await db.collection('results').where('studentId', '==', studentId).get();
+        allStudentResults = ownSnap.docs.map(doc => doc.data());
+
         if (ownSnap.empty) {
             contentDiv.innerHTML = '<p class="text-center text-light">No results found.</p>';
             document.getElementById('muetDisplay').innerHTML = '';
+            studentRankingHTML = '';
             return;
         }
 
@@ -376,6 +432,9 @@ async function loadStudentResults(studentId, className) {
             html += `<div class="result-summary"><strong>Overall Average NGP: ${ownAvgNgp.toFixed(2)}</strong></div>`;
         }
 
+        let classRankingHTML = '';
+        let overallRankingHTML = '';
+
         // Class ranking
         if (className) {
             try {
@@ -416,7 +475,7 @@ async function loadStudentResults(studentId, className) {
                 else if (ownAvgNgp >= 2.00) status = 'Satisfactory';
                 else status = 'Needs Improvement';
 
-                html += `
+                classRankingHTML = `
                 <div class="status-container mt-12">
                     <div class="status-badge green">
                         <strong>🏅 Class Position: ${classPosition}</strong> (based on NGP)
@@ -425,6 +484,7 @@ async function loadStudentResults(studentId, className) {
                         <strong>📊 Academic Status: ${status}</strong>
                     </div>
                 </div>`;
+                html += classRankingHTML;
             } catch (err) {
                 console.error('Class ranking error:', err);
                 html += '<p class="text-light">Could not calculate class ranking.</p>';
@@ -465,20 +525,22 @@ async function loadStudentResults(studentId, className) {
                 }
             }
 
-            html += `
+            overallRankingHTML = `
             <div class="status-container mt-12">
                 <div class="status-badge green" style="border-color: #f59e0b; color: #fbbf24;">
                     <strong>🌍 Overall School Rank: ${overallPosition}</strong> out of ${totalRanked} students
                 </div>
             </div>`;
+            html += overallRankingHTML;
         } catch (err) {
             console.error('Overall ranking error:', err);
             html += '<p class="text-light">Could not calculate overall school rank.</p>';
         }
 
+        studentRankingHTML = classRankingHTML + overallRankingHTML;
         contentDiv.innerHTML = html;
 
-        // ---------- MUET DISPLAY (detailed) ----------
+        // MUET display
         const stuDoc = await db.collection('students').doc(studentId).get();
         let muetHTML = '';
         if (stuDoc.exists) {
@@ -501,10 +563,10 @@ async function loadStudentResults(studentId, className) {
             }
         }
         document.getElementById('muetDisplay').innerHTML = muetHTML;
-        // ---------- end MUET display ----------
     } catch (error) {
         console.error('Error loading results:', error);
         contentDiv.innerHTML = '<p class="text-center error-text">Error loading results.</p>';
+        studentRankingHTML = '';
     }
 }
 
@@ -577,6 +639,7 @@ async function loadClassStudents(className) {
                 <td>
                     <button class="btn btn-xs btn-primary" onclick="showResultModal('${student.id}', '${student.name}', '${className}')">📝 Results</button>
                     <button class="btn btn-xs btn-accent" onclick="showMuetModal('${student.id}', '${className}')">📘MUET</button>
+                    <button class="btn btn-xs btn-outline" onclick="printStudentSlip('${student.id}', '${className}')">🖨️ Slip</button>
                     <button class="btn btn-xs btn-danger" onclick="deleteStudent('${student.id}', '${className}')">🗑️ Delete</button>
                 </td>
             </tr>`;
@@ -752,13 +815,11 @@ function showMuetModal(studentId, className) {
     document.getElementById('muetStudentId').value = studentId;
     document.getElementById('muetClassName').value = className;
 
-    // Remove required attributes from all MUET mark fields
     ['muetListening', 'muetSpeaking', 'muetReading', 'muetWriting'].forEach(id => {
         const field = document.getElementById(id);
         if (field) field.removeAttribute('required');
     });
 
-    // Clear fields
     document.getElementById('muetListening').value = '';
     document.getElementById('muetSpeaking').value = '';
     document.getElementById('muetReading').value = '';
@@ -787,7 +848,6 @@ async function loadExistingMuet(studentId) {
                 document.getElementById('muetWriting').value   = data.muet.writing   ?? '';
                 calculateMuetBand();
             } else {
-                // Clear everything
                 document.getElementById('muetListening').value = '';
                 document.getElementById('muetSpeaking').value  = '';
                 document.getElementById('muetReading').value   = '';
@@ -868,7 +928,6 @@ async function handleSaveMuet(event) {
     if (reading   !== null) muetData.reading   = reading;
     if (writing   !== null) muetData.writing   = writing;
 
-    // Compute total & band only when all four are present
     if (listening !== null && speaking !== null && reading !== null && writing !== null) {
         const total = listening + speaking + reading + writing;
         let band = null;
@@ -894,12 +953,12 @@ async function handleSaveMuet(event) {
         if (muetData.band) {
             updateObj.muetBand = muetData.band;
         } else {
-            updateObj.muetBand = '';  // clear old band if incomplete
+            updateObj.muetBand = '';
         }
 
         await db.collection('students').doc(studentId).update(updateObj);
         showToast('MUET result saved!', 'success');
-        closeMuetModal();  // This now works
+        closeMuetModal();
     } catch (error) {
         console.error('Error saving MUET:', error);
         showToast('Failed to save MUET result.', 'error');
@@ -907,7 +966,7 @@ async function handleSaveMuet(event) {
     hideLoading();
 }
 
-// ========== PER‑CLASS ANALYSIS (grade distribution per subject) ==========
+// ========== PER‑CLASS ANALYSIS (grade distribution per subject + STUDENT DATA WITH RANKS) ==========
 function openAnalysisModal() {
     const className = sessionStorage.getItem('currentClass');
     if (!className) {
@@ -963,7 +1022,7 @@ async function runAnalysis() {
             return;
         }
 
-        // Group by subject
+        // ---- Grade distribution ----
         const subjectData = {};
         filteredResults.forEach(r => {
             if (!subjectData[r.subject]) subjectData[r.subject] = [];
@@ -1030,6 +1089,95 @@ async function runAnalysis() {
                 </table>
             </div>`;
         }
+
+        // ---- Student data table with ranks ----
+        const studentsMap = {};
+        studentsSnap.forEach(doc => { studentsMap[doc.id] = doc.data().name; });
+
+        const studentMarks = {};
+        filteredResults.forEach(r => {
+            if (!studentMarks[r.studentId]) {
+                studentMarks[r.studentId] = { name: studentsMap[r.studentId] || r.studentId, subjects: {}, totalNgp: 0, count: 0 };
+            }
+            const s = studentMarks[r.studentId];
+            if (!s.subjects[r.subject] || r.marks > s.subjects[r.subject]) {
+                s.subjects[r.subject] = r.marks;
+            }
+            s.totalNgp += getNGP(r.marks);
+            s.count++;
+        });
+
+        const subjectsAll = new Set();
+        Object.values(studentMarks).forEach(s => Object.keys(s.subjects).forEach(sub => subjectsAll.add(sub)));
+        const subjectsList = Array.from(subjectsAll).sort();
+
+        const studentRows = Object.entries(studentMarks).map(([id, data]) => ({
+            id,
+            name: data.name,
+            avgNgp: data.count ? (data.totalNgp / data.count).toFixed(2) : '0.00',
+            avgNgpNum: data.count ? (data.totalNgp / data.count) : 0,
+            subjects: data.subjects
+        }));
+
+        // Class ranking (based on filtered results)
+        const sortedByAvg = [...studentRows].sort((a, b) => b.avgNgpNum - a.avgNgpNum);
+        let classRank = 1;
+        let prevAvg = sortedByAvg[0]?.avgNgpNum;
+        const classRankMap = {};
+        for (let i = 0; i < sortedByAvg.length; i++) {
+            if (sortedByAvg[i].avgNgpNum < prevAvg) {
+                classRank = i + 1;
+                prevAvg = sortedByAvg[i].avgNgpNum;
+            }
+            classRankMap[sortedByAvg[i].id] = classRank;
+        }
+
+        // Overall school ranking (all students, all results)
+        let overallRankMap = {};
+        try {
+            const allStudentsSnap = await db.collection('students').get();
+            const allStudentIds = allStudentsSnap.docs.map(d => d.id);
+            const allResSnap = await db.collection('results').where('studentId', 'in', allStudentIds).get();
+            const ngpTotals = {};
+            allResSnap.forEach(doc => {
+                const r = doc.data();
+                if (!ngpTotals[r.studentId]) ngpTotals[r.studentId] = { sum: 0, cnt: 0 };
+                ngpTotals[r.studentId].sum += getNGP(r.marks);
+                ngpTotals[r.studentId].cnt += 1;
+            });
+            const overallAvgs = Object.entries(ngpTotals).map(([id, d]) => ({ id, avg: d.sum / d.cnt }));
+            overallAvgs.sort((a, b) => b.avg - a.avg);
+            let oRank = 1;
+            let oPrev = overallAvgs[0]?.avg;
+            for (let i = 0; i < overallAvgs.length; i++) {
+                if (overallAvgs[i].avg < oPrev) {
+                    oRank = i + 1;
+                    oPrev = overallAvgs[i].avg;
+                }
+                overallRankMap[overallAvgs[i].id] = oRank;
+            }
+        } catch (err) {
+            console.error('Overall ranking error:', err);
+        }
+
+        html += `<h4 class="mb-12 mt-24">Student Performance</h4>
+        <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Student</th>${subjectsList.map(s => `<th>${s}</th>`).join('')}<th>Class Rank</th><th>Overall Rank</th><th>NGP</th></tr></thead>
+            <tbody>`;
+
+        studentRows.forEach(row => {
+            html += `<tr><td>${row.name}</td>`;
+            subjectsList.forEach(sub => {
+                const mark = row.subjects[sub];
+                const grade = mark !== undefined ? getGrade(mark) : '--';
+                html += `<td>${grade}</td>`;
+            });
+            const cRank = classRankMap[row.id] || '-';
+            const oRank = overallRankMap[row.id] || '-';
+            html += `<td>${cRank}</td><td>${oRank}</td><td><strong>${row.avgNgp}</strong></td></tr>`;
+        });
+        html += '</tbody></table></div>';
 
         contentDiv.innerHTML = html;
     } catch (error) {
@@ -1106,7 +1254,6 @@ async function runGlobalAnalysis() {
             return;
         }
 
-        // Group by subject
         const subjectData = {};
         filteredResults.forEach(r => {
             if (!subjectData[r.subject]) subjectData[r.subject] = [];
@@ -1231,28 +1378,21 @@ async function handleSaveClass(event) {
     try {
         if (editMode) {
             const isNameChanged = className !== originalClassName;
-            
             if (isNameChanged) {
-                // Check if new class name already exists
                 const existingDoc = await db.collection('classes').doc(className).get();
                 if (existingDoc.exists) {
                     showToast('A class with that name already exists', 'error');
                     hideLoading();
                     return;
                 }
-                
-                // Create new class with updated name
                 await db.collection('classes').doc(className).set({
                     name: className,
                     homeroomTeacher: homeroomTeacher,
                     createdAt: new Date().toISOString()
                 });
-                
-                // Delete old class
                 await db.collection('classes').doc(originalClassName).delete();
                 showToast('Class updated and renamed successfully!', 'success');
             } else {
-                // Only homeroom teacher changed
                 await db.collection('classes').doc(originalClassName).update({
                     homeroomTeacher: homeroomTeacher
                 });
@@ -1311,7 +1451,6 @@ async function openProfile() {
     const studentFields = document.getElementById('profileStudentFields');
     const teacherFields = document.getElementById('profileTeacherFields');
 
-    // Reset required attributes to avoid hidden-field validation errors
     document.getElementById('profileClass').removeAttribute('required');
     document.getElementById('profileRole').removeAttribute('required');
     document.getElementById('profileSubject').removeAttribute('required');
@@ -1320,12 +1459,10 @@ async function openProfile() {
     if (userType === 'student') {
         studentFields.style.display = 'block';
         teacherFields.style.display = 'none';
-        // Only student class is required
         document.getElementById('profileClass').setAttribute('required', '');
     } else {
         studentFields.style.display = 'none';
         teacherFields.style.display = 'block';
-        // Teacher role and subject are required; homeroom handled separately
         document.getElementById('profileRole').setAttribute('required', '');
         document.getElementById('profileSubject').setAttribute('required', '');
     }
@@ -1353,7 +1490,7 @@ async function openProfile() {
 
             const classSelect = document.getElementById('profileHomeroomClass');
             await populateClassDropdown(classSelect, data.homeroomClass || '');
-            toggleProfileHomeroomClass();   // This will also set required for homeroom if needed
+            toggleProfileHomeroomClass();
         }
 
         navigateTo('profile');
@@ -1758,7 +1895,7 @@ async function deleteCode(id) {
     }
 }
 
-// ========== PRINTABLE STUDENT RANKING REPORT (DUAL MODE) ==========
+// ========== PRINTABLE STUDENT RANKING REPORT (DUAL MODE – UPDATED WITH RANKS) ==========
 
 function printStudentRankingFromClass() {
     const className = sessionStorage.getItem('currentClass');
@@ -1769,7 +1906,6 @@ function printStudentRankingFromClass() {
 function printStudentRankingFromGlobal() {
     const classFilter = document.getElementById('globalAnalysisClass').value;
     const term = document.getElementById('globalAnalysisTerm').value;
-    // '__all__' means no class filter → ranking report for all classes
     printStudentRanking(classFilter === '__all__' ? null : classFilter, term);
 }
 
@@ -1780,9 +1916,8 @@ async function printStudentRanking(className, term) {
     showLoading();
 
     try {
-        // ---------- MODE 1: SPECIFIC CLASS → GRADE TABLE ----------
         if (className) {
-            // Get all students of the chosen class
+            // ----- MODE 1: Specific class grade report (WITH RANKS) -----
             const studentsSnap = await db.collection('students').where('class', '==', className).get();
             if (studentsSnap.empty) {
                 showToast('No students in this class.', 'error');
@@ -1794,7 +1929,6 @@ async function printStudentRanking(className, term) {
                 studentsMap[doc.id] = { id: doc.id, name: doc.data().name, class: doc.data().class };
             });
 
-            // Query results for this class (and possibly subject)
             let resultsQuery = db.collection('results').where('className', '==', className);
             if (role === 'Regular Teacher' && teacherSubject && teacherSubject !== 'None') {
                 resultsQuery = resultsQuery.where('subject', '==', teacherSubject);
@@ -1803,7 +1937,6 @@ async function printStudentRanking(className, term) {
             const allResults = [];
             resultsSnap.forEach(doc => allResults.push(doc.data()));
 
-            // Filter by term if selected
             const filtered = term ? allResults.filter(r => r.term === term) : allResults;
             if (filtered.length === 0) {
                 showToast(`No results found for ${term || 'any term'}.`, 'error');
@@ -1811,7 +1944,6 @@ async function printStudentRanking(className, term) {
                 return;
             }
 
-            // Build per‑student data: marks per subject and overall NGP
             const studentData = {};
             filtered.forEach(r => {
                 if (!studentsMap[r.studentId]) return;
@@ -1826,7 +1958,6 @@ async function printStudentRanking(className, term) {
                     };
                 }
                 const stu = studentData[r.studentId];
-                // Store the highest mark if duplicates exist (shouldn't)
                 if (!stu.subjects[r.subject] || r.marks > stu.subjects[r.subject]) {
                     stu.subjects[r.subject] = r.marks;
                 }
@@ -1834,16 +1965,61 @@ async function printStudentRanking(className, term) {
                 stu.ngpCount++;
             });
 
-            // Determine all subjects (alphabetically)
-            const allSubjects = new Set();
-            Object.values(studentData).forEach(s => Object.keys(s.subjects).forEach(sub => allSubjects.add(sub)));
-            const subjectsSorted = Array.from(allSubjects).sort();
-
-            // Build student list sorted by name
             const studentList = Object.values(studentData);
+
+            // Class ranking (based on filtered results)
+            const sortedByAvg = [...studentList].sort((a, b) => {
+                const avgA = a.ngpCount ? (a.ngpTotal / a.ngpCount) : 0;
+                const avgB = b.ngpCount ? (b.ngpTotal / b.ngpCount) : 0;
+                return avgB - avgA;
+            });
+            const classRankMap = {};
+            let cRank = 1;
+            let prevAvg = sortedByAvg[0]?.ngpCount ? (sortedByAvg[0].ngpTotal / sortedByAvg[0].ngpCount) : 0;
+            for (let i = 0; i < sortedByAvg.length; i++) {
+                const avg = sortedByAvg[i].ngpCount ? (sortedByAvg[i].ngpTotal / sortedByAvg[i].ngpCount) : 0;
+                if (avg < prevAvg) {
+                    cRank = i + 1;
+                    prevAvg = avg;
+                }
+                classRankMap[sortedByAvg[i].id] = cRank;
+            }
+
+            // Overall school ranking (all students, all results, all terms)
+            let overallRankMap = {};
+            try {
+                const allStudentsSnap = await db.collection('students').get();
+                const allStudentIds = allStudentsSnap.docs.map(d => d.id);
+                const allResSnap = await db.collection('results').where('studentId', 'in', allStudentIds).get();
+                const ngpTotals = {};
+                allResSnap.forEach(doc => {
+                    const r = doc.data();
+                    if (!ngpTotals[r.studentId]) ngpTotals[r.studentId] = { sum: 0, cnt: 0 };
+                    ngpTotals[r.studentId].sum += getNGP(r.marks);
+                    ngpTotals[r.studentId].cnt += 1;
+                });
+                const overallAvgs = Object.entries(ngpTotals).map(([id, d]) => ({ id, avg: d.sum / d.cnt }));
+                overallAvgs.sort((a, b) => b.avg - a.avg);
+                let oRank = 1;
+                let oPrev = overallAvgs[0]?.avg;
+                for (let i = 0; i < overallAvgs.length; i++) {
+                    if (overallAvgs[i].avg < oPrev) {
+                        oRank = i + 1;
+                        oPrev = overallAvgs[i].avg;
+                    }
+                    overallRankMap[overallAvgs[i].id] = oRank;
+                }
+            } catch (err) {
+                console.error('Overall ranking error:', err);
+            }
+
+            // Sort studentList by name for report
             studentList.sort((a, b) => a.name.localeCompare(b.name));
 
-            // Generate HTML for grade table
+            const allSubjects = new Set();
+            studentList.forEach(s => Object.keys(s.subjects).forEach(sub => allSubjects.add(sub)));
+            const subjectsSorted = Array.from(allSubjects).sort();
+
             let html = `<h3>Class: ${className} | ${term ? 'Term: ' + term : 'All Terms'}</h3>`;
             html += `<table>
                 <thead>
@@ -1853,7 +2029,7 @@ async function printStudentRanking(className, term) {
                         <th>IC No.</th>
                         <th>Class</th>`;
             subjectsSorted.forEach(sub => html += `<th>${sub}</th>`);
-            html += `<th>GP</th></tr></thead><tbody>`;
+            html += `<th>Class Rank</th><th>Overall Rank</th><th>GP</th></tr></thead><tbody>`;
 
             let counter = 1;
             studentList.forEach(s => {
@@ -1868,11 +2044,12 @@ async function printStudentRanking(className, term) {
                     const grade = mark !== undefined ? getGrade(mark) : '--';
                     html += `<td>${grade}</td>`;
                 });
-                html += `<td><strong>${avgNgp}</strong></td></tr>`;
+                const rank = classRankMap[s.id] || '-';
+                const overall = overallRankMap[s.id] || '-';
+                html += `<td>${rank}</td><td>${overall}</td><td><strong>${avgNgp}</strong></td></tr>`;
             });
             html += '</tbody></table>';
 
-            // Open print window
             const printWindow = window.open('', '_blank', 'width=1000,height=700');
             if (!printWindow) {
                 showToast('Popup blocked. Please allow popups.', 'error');
@@ -1914,7 +2091,7 @@ async function printStudentRanking(className, term) {
             return;
         }
 
-        // ---------- MODE 2: ALL CLASSES → RANKING REPORT ----------
+        // ---------- MODE 2: ALL CLASSES → RANKING REPORT (unchanged) ----------
         let studentsQuery = db.collection('students');
         const studentsSnap = await studentsQuery.get();
         if (studentsSnap.empty) {
@@ -1927,7 +2104,6 @@ async function printStudentRanking(className, term) {
             studentsMap[doc.id] = { id: doc.id, name: doc.data().name, class: doc.data().class };
         });
 
-        // Build results query – if a regular teacher, restrict to their subject
         let resultsQuery = db.collection('results');
         if (role === 'Regular Teacher' && teacherSubject && teacherSubject !== 'None') {
             resultsQuery = resultsQuery.where('subject', '==', teacherSubject);
@@ -1938,7 +2114,6 @@ async function printStudentRanking(className, term) {
 
         const filtered = term ? allResults.filter(r => r.term === term) : allResults;
 
-        // Overall school ranking (all students, all results)
         const allStudentsSnap = await db.collection('students').get();
         const allStudentsMap = {};
         allStudentsSnap.forEach(doc => {
@@ -1959,7 +2134,6 @@ async function printStudentRanking(className, term) {
             overallStudentNgpMap[r.studentId].count += 1;
         });
 
-        // Per‑student data from the filtered results for the report
         const studentDataMap = {};
         filtered.forEach(r => {
             if (!studentsMap[r.studentId]) return;
@@ -2006,7 +2180,6 @@ async function printStudentRanking(className, term) {
         });
         const sortedClasses = Object.keys(classGroups).sort();
 
-        // Class ranking within each class
         for (const cls of sortedClasses) {
             const arr = classGroups[cls];
             arr.sort((a, b) => b.avgNgp - a.avgNgp);
@@ -2021,7 +2194,6 @@ async function printStudentRanking(className, term) {
             }
         }
 
-        // Overall school ranking
         const overallList = [];
         for (const [sid, data] of Object.entries(overallStudentNgpMap)) {
             if (data.count > 0) overallList.push({ id: sid, avgNgp: data.totalNgp / data.count });
@@ -2041,7 +2213,6 @@ async function printStudentRanking(className, term) {
             s.overallRank = rankMap[s.id] || 'N/A';
         });
 
-        // Build HTML ranking report
         let html = '';
         let counter = 1;
         for (const cls of sortedClasses) {
@@ -2078,7 +2249,6 @@ async function printStudentRanking(className, term) {
             html += '</tbody></table>';
         }
 
-        // Print window for ranking report
         const printWindow = window.open('', '_blank', 'width=900,height=700');
         if (!printWindow) {
             showToast('Popup blocked. Please allow popups.', 'error');
@@ -2125,11 +2295,123 @@ async function printStudentRanking(className, term) {
     hideLoading();
 }
 
+// ========== INDIVIDUAL STUDENT SLIP (with class & overall ranking) ==========
+async function printStudentSlip(studentId, className) {
+    showLoading();
+    try {
+        const studentDoc = await db.collection('students').doc(studentId).get();
+        if (!studentDoc.exists) {
+            showToast('Student not found.', 'error');
+            hideLoading();
+            return;
+        }
+        const studentData = studentDoc.data();
+        const studentName = studentData.name;
+
+        const resultsSnap = await db.collection('results').where('studentId', '==', studentId).get();
+        const studentResults = resultsSnap.docs.map(doc => doc.data());
+
+        // Class ranking
+        const classStudentsSnap = await db.collection('students').where('class', '==', className).get();
+        const classStudentIds = classStudentsSnap.docs.map(doc => doc.id);
+        const classResultsSnap = await db.collection('results').where('studentId', 'in', classStudentIds).get();
+
+        const classNgpMap = {};
+        classResultsSnap.forEach(doc => {
+            const r = doc.data();
+            if (!classNgpMap[r.studentId]) classNgpMap[r.studentId] = { totalNgp: 0, count: 0 };
+            classNgpMap[r.studentId].totalNgp += getNGP(r.marks);
+            classNgpMap[r.studentId].count += 1;
+        });
+        const classAverages = Object.entries(classNgpMap).map(([id, data]) => ({
+            id,
+            avgNgp: data.totalNgp / data.count
+        }));
+        classAverages.sort((a, b) => b.avgNgp - a.avgNgp);
+        const classRank = classAverages.findIndex(s => s.id === studentId) + 1;
+        const classSize = classAverages.length;
+
+        // Overall ranking
+        const allStudentsSnap = await db.collection('students').get();
+        const allStudentIds = allStudentsSnap.docs.map(doc => doc.id);
+        const allResultsSnap = await db.collection('results').where('studentId', 'in', allStudentIds).get();
+        const overallNgpMap = {};
+        allResultsSnap.forEach(doc => {
+            const r = doc.data();
+            if (!overallNgpMap[r.studentId]) overallNgpMap[r.studentId] = { totalNgp: 0, count: 0 };
+            overallNgpMap[r.studentId].totalNgp += getNGP(r.marks);
+            overallNgpMap[r.studentId].count += 1;
+        });
+        const overallAverages = Object.entries(overallNgpMap).map(([id, data]) => ({
+            id,
+            avgNgp: data.totalNgp / data.count
+        }));
+        overallAverages.sort((a, b) => b.avgNgp - a.avgNgp);
+        const overallRank = overallAverages.findIndex(s => s.id === studentId) + 1;
+        const totalStudents = overallAverages.length;
+
+        let slipHTML = `<div style="font-family: 'Segoe UI', sans-serif; padding: 20px; max-width: 800px;">
+            <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
+                <h1>Pusat Tingkatan Enam SMK Badin</h1>
+                <h2>Student Examination Slip</h2>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+                <div><strong>Name:</strong> ${studentName}</div>
+                <div><strong>IC No.:</strong> ${studentId}</div>
+                <div><strong>Class:</strong> ${className}</div>
+            </div>
+            <div style="display: flex; justify-content: space-around; margin-bottom: 20px; background: #f8f9fa; padding: 10px; border: 1px solid #ccc;">
+                <div>🏅 <strong>Class Rank:</strong> ${classRank} / ${classSize}</div>
+                <div>🌍 <strong>Overall School Rank:</strong> ${overallRank} / ${totalStudents}</div>
+            </div>
+            <table style="border-collapse: collapse; width: 100%;">
+                <thead>
+                    <tr style="background: #f0f0f0;">
+                        <th>Subject</th><th>Term</th><th>Marks</th><th>Grade</th><th>NGP</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+        studentResults.forEach(r => {
+            slipHTML += `<tr>
+                <td>${r.subject}</td>
+                <td>${r.term}</td>
+                <td>${r.marks}</td>
+                <td>${getGrade(r.marks)}</td>
+                <td>${getNGP(r.marks).toFixed(2)}</td>
+            </tr>`;
+        });
+        slipHTML += `</tbody></table>`;
+
+        if (studentData.muet && studentData.muet.band) {
+            slipHTML += `<div style="margin-top: 20px;"><strong>MUET Band:</strong> ${studentData.muet.band}</div>`;
+        }
+
+        slipHTML += `</div>`;
+
+        const printWindow = window.open('', '_blank', 'width=900,height=700');
+        if (!printWindow) {
+            showToast('Popup blocked. Please allow popups.', 'error');
+            hideLoading();
+            return;
+        }
+
+        printWindow.document.write(`<!DOCTYPE html><html><head><title>Exam Slip</title></head><body>${slipHTML}</body></html>`);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => { printWindow.print(); printWindow.close(); }, 800);
+    } catch (error) {
+        console.error('Error generating slip:', error);
+        showToast('Failed to generate slip.', 'error');
+    }
+    hideLoading();
+}
+
 // ========== INITIAL SETUP & EVENT BINDING ==========
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('studentLoginForm').addEventListener('submit', handleStudentLogin);
     document.getElementById('teacherLoginForm').addEventListener('submit', handleTeacherLogin);
-    
+
     document.getElementById('registerStudentForm').addEventListener('submit', registrationRequest('student'));
     document.getElementById('registerTeacherForm').addEventListener('submit', registrationRequest('teacher'));
 
