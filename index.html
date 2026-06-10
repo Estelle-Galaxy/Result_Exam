@@ -85,13 +85,26 @@
             </div>
         </div>
 
-        <!-- ========== PAGE: Student Results ========== -->
+        <!-- ========== PAGE: Student Results (UPDATED) ========== -->
         <div class="page" id="page-student-results">
             <div class="card wide">
                 <div class="flex-between mb-16">
                     <div style="display: flex; gap: 8px;">
                         <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout()">← Logout</button>
-                        <button class="btn btn-sm btn-outline btn-auto" onclick="printContent('studentResultsPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Keputusan Peperiksaan Keseluruhan')">🖨️ Print</button>
+                        <!-- NEW: Term filter dropdown + filtered print button -->
+                        <select id="studentPrintTermFilter" class="btn btn-sm btn-outline btn-auto" style="min-width:150px;" onchange="filterStudentResultsView()">
+                            <option value="">All Semesters</option>
+                            <option value="Sem 1">Sem 1</option>
+                            <option value="Pertengahan Sem 1">Pertengahan Sem 1</option>
+                            <option value="Percubaan Sem 1">Percubaan Sem 1</option>
+                            <option value="Sem 2">Sem 2</option>
+                            <option value="Pertengahan Sem 2">Pertengahan Sem 2</option>
+                            <option value="Percubaan Sem 2">Percubaan Sem 2</option>
+                            <option value="Sem 3">Sem 3</option>
+                            <option value="Pertengahan Sem 3">Pertengahan Sem 3</option>
+                            <option value="Percubaan Sem 3">Percubaan Sem 3</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline btn-auto" onclick="printFilteredStudentResults()">🖨️ Print</button>
                         <button class="btn btn-sm btn-outline btn-auto" onclick="openProfile()">👤 Profile</button>
                     </div>
                     <span class="fw-700" id="studentNameDisplay"></span>
@@ -116,7 +129,7 @@
                 <form id="teacherLoginForm" onsubmit="return false;">
                     <div class="form-group">
                         <label for="teacherStaffInput">Staff Number</label>
-                        <input type="text" id="teacherStaffInput" placeholder="e.g. 60111113426546" required autocomplete="off">
+                        <input type="text" id="teacherStaffInput" placeholder="e.g. T2024001" required autocomplete="off">
                     </div>
                     <div class="form-group">
                         <label for="teacherPasswordInput">Password</label>
@@ -246,7 +259,6 @@
                             <option value="Seni Visual">Seni Visual</option>
                             <option value="ICT">ICT</option>
                             <option value="Ekonomi">Ekonomi</option>
-                            <option value="MUET">MUET</option>
                             <option value="None">None</option>
                         </select>
                     </div>
@@ -346,7 +358,6 @@
                                 <option value="Seni Visual">Seni Visual</option>
                                 <option value="ICT">ICT</option>
                                 <option value="Ekonomi">Ekonomi</option>
-                                <option value="MUET">MUET</option>
                                 <option value="None">None</option>
                             </select>
                         </div>
@@ -447,7 +458,7 @@
         </div>
     </div>
 
-    <!-- ========== MUET MODAL ========== -->
+    <!-- ========== MUET MODAL (FIXED – partial saves enabled) ========== -->
     <div class="modal-overlay" id="muetModalOverlay">
         <div class="modal" id="muetModal" style="max-width: 550px;">
             <button type="button" class="modal-close" onclick="closeMuetModal()">✕</button>
