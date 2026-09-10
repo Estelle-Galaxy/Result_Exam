@@ -1,8 +1,3 @@
-// app.js – Complete system with OTP verification, admin panel, per‑subject grade distribution analysis,
-// new MUET section marks, student details in printed slip, filtered student printing,
-// teacher analysis student data with class/overall ranks, individual exam slip with rankings,
-// and student ranking displayed in printable results.
-
 // ========== FIREBASE CONFIGURATION ==========
 const firebaseConfig = {
     apiKey: "AIzaSyCBjA_xaSAJdweodUsEMzvGY5R69I3esgE",
@@ -329,6 +324,9 @@ function buildResultsHTML(results) {
     });
 
     let html = '';
+    let overallNgpTotal = 0;
+    let overallCount = 0;
+
     for (const [term, termResults] of Object.entries(grouped)) {
         html += `
         <div class="mb-24">
@@ -337,9 +335,14 @@ function buildResultsHTML(results) {
                 <table>
                     <thead><tr><th>Subject</th><th>Percentage (%)</th><th>Grade</th><th>NGP</th></tr></thead>
                     <tbody>`;
+
+        let termNgpTotal = 0;
         termResults.forEach(r => {
             const grade = getGrade(r.marks);
             const ngp = getNGP(r.marks);
+            termNgpTotal += ngp;
+            overallNgpTotal += ngp;
+            overallCount += 1;
             html += `<tr>
                 <td>${r.subject}</td>
                 <td>${r.marks}</td>
@@ -347,8 +350,21 @@ function buildResultsHTML(results) {
                 <td>${ngp.toFixed(2)}</td>
             </tr>`;
         });
-        html += `</tbody></table></div></div>`;
+
+        const termAvgNgp = termResults.length
+            ? (termNgpTotal / termResults.length).toFixed(2)
+            : '0.00';
+
+        html += `</tbody></table></div>
+            <p class="fw-700 mt-8">Term Average NGP: ${termAvgNgp}</p>
+        </div>`;
     }
+
+    if (overallCount > 0) {
+        const overallAvgNgp = (overallNgpTotal / overallCount).toFixed(2);
+        html += `<div class="result-summary"><strong>Overall Average NGP: ${overallAvgNgp}</strong></div>`;
+    }
+
     return html;
 }
 
@@ -1378,27 +1394,72 @@ async function handleSaveClass(event) {
     try {
         if (editMode) {
             const isNameChanged = className !== originalClassName;
+
             if (isNameChanged) {
+                // 1. Make sure the new name isn't already taken
                 const existingDoc = await db.collection('classes').doc(className).get();
                 if (existingDoc.exists) {
                     showToast('A class with that name already exists', 'error');
                     hideLoading();
                     return;
                 }
-                await db.collection('classes').doc(className).set({
+
+                // 2. Fetch everything that still references the OLD class name
+                const [studentsSnap, resultsSnap, teachersSnap] = await Promise.all([
+                    db.collection('students').where('class', '==', originalClassName).get(),
+                    db.collection('results').where('className', '==', originalClassName).get(),
+                    db.collection('teachers').where('homeroomClass', '==', originalClassName).get()
+                ]);
+
+                // 3. Apply all changes in one atomic batch
+                const batch = db.batch();
+
+                // Create the new class doc
+                batch.set(db.collection('classes').doc(className), {
                     name: className,
                     homeroomTeacher: homeroomTeacher,
                     createdAt: new Date().toISOString()
                 });
-                await db.collection('classes').doc(originalClassName).delete();
-                showToast('Class updated and renamed successfully!', 'success');
+
+                // Delete the old class doc
+                batch.delete(db.collection('classes').doc(originalClassName));
+
+                // Re-point every student
+                studentsSnap.forEach(doc => {
+                    batch.update(doc.ref, { class: className });
+                });
+
+                // Re-point every result (they store className as a string)
+                resultsSnap.forEach(doc => {
+                    batch.update(doc.ref, { className: className });
+                });
+
+                // Re-point any teacher whose homeroom was this class
+                teachersSnap.forEach(doc => {
+                    batch.update(doc.ref, { homeroomClass: className });
+                });
+
+                await batch.commit();
+
+                // If the logged-in teacher's homeroom was the one renamed, update sessionStorage
+                if (sessionStorage.getItem('homeroomClass') === originalClassName) {
+                    sessionStorage.setItem('homeroomClass', className);
+                }
+
+                showToast(
+                    `Class renamed. Moved ${studentsSnap.size} student(s), ` +
+                    `${resultsSnap.size} result(s), ${teachersSnap.size} teacher record(s).`,
+                    'success'
+                );
             } else {
+                // Same name — just update the homeroom teacher
                 await db.collection('classes').doc(originalClassName).update({
                     homeroomTeacher: homeroomTeacher
                 });
                 showToast('Class updated successfully!', 'success');
             }
         } else {
+            // Create new class
             const existingDoc = await db.collection('classes').doc(className).get();
             if (existingDoc.exists) {
                 showToast('Class already exists', 'error');
@@ -1412,11 +1473,12 @@ async function handleSaveClass(event) {
             });
             showToast('Class created successfully!', 'success');
         }
+
         closeAddClassModal();
         loadTeacherClasses();
     } catch (error) {
         console.error('Error saving class:', error);
-        showToast('Failed to save class.', 'error');
+        showToast('Failed to save class: ' + (error.message || ''), 'error');
     }
     hideLoading();
 }
@@ -1802,7 +1864,7 @@ document.getElementById('verifyCodeForm').addEventListener('submit', async (e) =
         navigateTo('set-password');
     } catch (err) {
         hideLoading();
-        document.getElementById('muetForm').setAttribute('novalidate', '');
+        document.getElementById('verificationError').textContent = err.message;
     }
 });
 
