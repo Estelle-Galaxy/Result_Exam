@@ -1,3 +1,8 @@
+// app.js – Complete system with OTP verification, admin panel, per‑subject grade distribution analysis,
+// new MUET section marks, student details in printed slip, filtered student printing,
+// teacher analysis student data with class/overall ranks, individual exam slip with rankings,
+// and student ranking displayed in printable results.
+
 // ========== FIREBASE CONFIGURATION ==========
 const firebaseConfig = {
     apiKey: "AIzaSyCBjA_xaSAJdweodUsEMzvGY5R69I3esgE",
@@ -33,6 +38,19 @@ function showToast(message, type = 'info') {
     toast.textContent = message;
     container.appendChild(toast);
     setTimeout(() => toast.remove(), 4000);
+}
+
+// Escape user-supplied strings before injecting into HTML text/attributes.
+// Prevents apostrophes (e.g. O'Conner) or quotes/angle brackets from breaking
+// markup or executing as code.
+function escapeHTML(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function navigateTo(pageId) {
@@ -95,9 +113,9 @@ function printContent(areaId, reportTitle = 'Pusat Tingkatan Enam SMK Badin', re
         const userClass = sessionStorage.getItem('userClass') || '';
         headerHTML += `
             <div class="student-detail-print">
-                <p><strong>Student Name:</strong> ${userName}</p>
-                <p><strong>IC No.:</strong> ${userId}</p>
-                <p><strong>Class:</strong> ${userClass}</p>
+                <p><strong>Student Name:</strong> ${escapeHTML(userName)}</p>
+                <p><strong>IC No.:</strong> ${escapeHTML(userId)}</p>
+                <p><strong>Class:</strong> ${escapeHTML(userClass)}</p>
             </div>
         `;
     }
@@ -330,7 +348,7 @@ function buildResultsHTML(results) {
     for (const [term, termResults] of Object.entries(grouped)) {
         html += `
         <div class="mb-24">
-            <h3 class="term-heading">${term}</h3>
+            <h3 class="term-heading">${escapeHTML(term)}</h3>
             <div class="table-wrapper">
                 <table>
                     <thead><tr><th>Subject</th><th>Percentage (%)</th><th>Grade</th><th>NGP</th></tr></thead>
@@ -344,7 +362,7 @@ function buildResultsHTML(results) {
             overallNgpTotal += ngp;
             overallCount += 1;
             html += `<tr>
-                <td>${r.subject}</td>
+                <td>${escapeHTML(r.subject)}</td>
                 <td>${r.marks}</td>
                 <td><span class="badge badge-${grade.toLowerCase().replace(/[^a-z]/g, '')}">${grade}</span></td>
                 <td>${ngp.toFixed(2)}</td>
@@ -418,7 +436,7 @@ async function loadStudentResults(studentId, className) {
             let termNgpTotal = 0;
             html += `
             <div class="mb-24">
-                <h3 class="term-heading">${term}</h3>
+                <h3 class="term-heading">${escapeHTML(term)}</h3>
                 <div class="table-wrapper">
                     <table>
                         <thead><tr><th>Subject</th><th>Percentage (%)</th><th>Grade</th><th>NGP</th></tr></thead>
@@ -430,7 +448,7 @@ async function loadStudentResults(studentId, className) {
                 overallNgpTotal += ngp;
                 overallCount += 1;
                 html += `<tr>
-                    <td>${r.subject}</td>
+                    <td>${escapeHTML(r.subject)}</td>
                     <td>${r.marks}</td>
                     <td><span class="badge badge-${grade.toLowerCase().replace(/[^a-z]/g, '')}">${grade}</span></td>
                     <td>${ngp.toFixed(2)}</td>
@@ -570,12 +588,12 @@ async function loadStudentResults(studentId, className) {
                 const band = muetData.band || stuDoc.data().muetBand || '';
                 muetHTML = `
                     <div class="badge badge-b" style="font-size:0.95rem; line-height:1.6;">
-                        <strong>MUET</strong> – ${band}<br>
+                        <strong>MUET</strong> – ${escapeHTML(band)}<br>
                         <small>L: ${l} | S: ${s} | R: ${r} | W: ${w} | Total: ${total}/300</small>
                     </div>`;
             } else {
                 const band = stuDoc.data().muetBand || null;
-                if (band) muetHTML = `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${band}</div>`;
+                if (band) muetHTML = `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${escapeHTML(band)}</div>`;
             }
         }
         document.getElementById('muetDisplay').innerHTML = muetHTML;
@@ -587,6 +605,8 @@ async function loadStudentResults(studentId, className) {
 }
 
 // ========== TEACHER CLASSES & STUDENTS ==========
+// Uses data-* attributes + delegated event listeners so class names containing
+// apostrophes, quotes, or angle brackets cannot break the markup or the handlers.
 async function loadTeacherClasses() {
     const contentDiv = document.getElementById('classListContent');
     contentDiv.innerHTML = '<p class="text-center text-light">Loading classes...</p>';
@@ -603,18 +623,30 @@ async function loadTeacherClasses() {
             const homeroom = data.homeroomTeacher || 'N/A';
             html += `
             <div class="class-item">
-                <button class="btn btn-outline class-btn" onclick="selectClass('${className}')">
-                    <span class="class-name">${className}</span>
-                    <small class="homeroom">${homeroom}</small>
+                <button class="btn btn-outline class-btn" data-action="select-class" data-class="${escapeHTML(className)}">
+                    <span class="class-name">${escapeHTML(className)}</span>
+                    <small class="homeroom">${escapeHTML(homeroom)}</small>
                 </button>
                 <div class="class-actions">
-                    <button class="btn btn-xs btn-primary" onclick="event.stopPropagation(); showEditClassModal('${className}', '${homeroom}')">✏️ Edit</button>
-                    <button class="btn btn-xs btn-danger" onclick="event.stopPropagation(); deleteClass('${className}')">🗑️ Delete</button>
+                    <button class="btn btn-xs btn-primary" data-action="edit-class" data-class="${escapeHTML(className)}" data-homeroom="${escapeHTML(homeroom)}">✏️ Edit</button>
+                    <button class="btn btn-xs btn-danger" data-action="delete-class" data-class="${escapeHTML(className)}">🗑️ Delete</button>
                 </div>
             </div>`;
         });
         html += '</div>';
         contentDiv.innerHTML = html;
+
+        // Bind handlers after insertion — safe for any character in the values
+        contentDiv.querySelectorAll('button[data-action]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const action = btn.dataset.action;
+                const cls = btn.dataset.class;
+                const homeroom = btn.dataset.homeroom;
+                if (action === 'select-class') selectClass(cls);
+                else if (action === 'edit-class') showEditClassModal(cls, homeroom);
+                else if (action === 'delete-class') deleteClass(cls);
+            });
+        });
     } catch (error) {
         console.error('Error loading classes:', error);
         contentDiv.innerHTML = '<p class="text-center error-text">Error loading classes.</p>';
@@ -650,18 +682,40 @@ async function loadClassStudents(className) {
                 <tbody>`;
         studentsArray.forEach(student => {
             html += `<tr>
-                <td>${student.id}</td>
-                <td>${student.name}</td>
+                <td>${escapeHTML(student.id)}</td>
+                <td>${escapeHTML(student.name)}</td>
                 <td>
-                    <button class="btn btn-xs btn-primary" onclick="showResultModal('${student.id}', '${student.name}', '${className}')">📝 Results</button>
-                    <button class="btn btn-xs btn-accent" onclick="showMuetModal('${student.id}', '${className}')">📘MUET</button>
-                    <button class="btn btn-xs btn-outline" onclick="printStudentSlip('${student.id}', '${className}')">🖨️ Slip</button>
-                    <button class="btn btn-xs btn-danger" onclick="deleteStudent('${student.id}', '${className}')">🗑️ Delete</button>
+                    <button class="btn btn-xs btn-primary" data-action="results"
+                            data-student-id="${escapeHTML(student.id)}"
+                            data-student-name="${escapeHTML(student.name)}"
+                            data-class="${escapeHTML(className)}">📝 Results</button>
+                    <button class="btn btn-xs btn-accent" data-action="muet"
+                            data-student-id="${escapeHTML(student.id)}"
+                            data-class="${escapeHTML(className)}">📘MUET</button>
+                    <button class="btn btn-xs btn-outline" data-action="slip"
+                            data-student-id="${escapeHTML(student.id)}"
+                            data-class="${escapeHTML(className)}">🖨️ Slip</button>
+                    <button class="btn btn-xs btn-danger" data-action="delete"
+                            data-student-id="${escapeHTML(student.id)}"
+                            data-class="${escapeHTML(className)}">🗑️ Delete</button>
                 </td>
             </tr>`;
         });
         html += '</tbody></table></div>';
         contentDiv.innerHTML = html;
+
+        contentDiv.querySelectorAll('button[data-action]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const action = btn.dataset.action;
+                const sid = btn.dataset.studentId;
+                const sname = btn.dataset.studentName || '';
+                const cls = btn.dataset.class;
+                if (action === 'results') showResultModal(sid, sname, cls);
+                else if (action === 'muet') showMuetModal(sid, cls);
+                else if (action === 'slip') printStudentSlip(sid, cls);
+                else if (action === 'delete') deleteStudent(sid, cls);
+            });
+        });
     } catch (error) {
         console.error('Error loading students:', error);
         contentDiv.innerHTML = '<p class="text-center error-text">Error loading students.</p>';
@@ -724,13 +778,17 @@ async function loadExistingResults(studentId) {
             const r = doc.data();
             const grade = getGrade(r.marks);
             html += `
-            <div class="existing-result-item">
-                <strong>${r.subject}</strong> - ${r.term}: ${r.marks}/100 
+            <div class="existing-result-item" data-result-id="${escapeHTML(doc.id)}">
+                <strong>${escapeHTML(r.subject)}</strong> - ${escapeHTML(r.term)}: ${r.marks}/100 
                 <span class="badge badge-${grade.toLowerCase().replace(/[^a-z]/g, '')}">${grade}</span>
-                <button class="btn btn-xs btn-danger delete-btn" onclick="deleteResult('${doc.id}')">Delete</button>
+                <button class="btn btn-xs btn-danger delete-btn" data-action="delete-result" data-result-id="${escapeHTML(doc.id)}">Delete</button>
             </div>`;
         });
         listDiv.innerHTML = html;
+
+        listDiv.querySelectorAll('button[data-action="delete-result"]').forEach(btn => {
+            btn.addEventListener('click', () => deleteResult(btn.dataset.resultId));
+        });
     } catch (error) {
         console.error('Error loading existing results:', error);
         listDiv.innerHTML = '<p class="error-text small-text">Error loading results.</p>';
@@ -1034,7 +1092,7 @@ async function runAnalysis() {
             : allResults;
 
         if (filteredResults.length === 0) {
-            contentDiv.innerHTML = `<p class="text-center text-light">No results found for ${selectedTerm || 'any term'}.</p>`;
+            contentDiv.innerHTML = `<p class="text-center text-light">No results found for ${escapeHTML(selectedTerm) || 'any term'}.</p>`;
             return;
         }
 
@@ -1045,7 +1103,7 @@ async function runAnalysis() {
             subjectData[r.subject].push(r.marks);
         });
 
-        let html = `<h4 class="mb-12">Class: ${className} ${selectedTerm ? 'Term: '+selectedTerm : 'All Terms'}</h4>`;
+        let html = `<h4 class="mb-12">Class: ${escapeHTML(className)} ${selectedTerm ? 'Term: '+escapeHTML(selectedTerm) : 'All Terms'}</h4>`;
 
         for (const [subject, marksArray] of Object.entries(subjectData)) {
             const total = marksArray.length;
@@ -1067,7 +1125,7 @@ async function runAnalysis() {
 
             html += `
             <div class="table-wrapper" style="margin-bottom:24px;">
-                <h5>${subject}</h5>
+                <h5>${escapeHTML(subject)}</h5>
                 <table>
                     <thead>
                         <tr><th>Total</th><th>Pass (A-C)</th><th>% Pass</th><th>Fail (C--F)</th><th>% Fail</th><th>GPMP</th></tr>
@@ -1179,11 +1237,11 @@ async function runAnalysis() {
         html += `<h4 class="mb-12 mt-24">Student Performance</h4>
         <div class="table-wrapper">
         <table>
-            <thead><tr><th>Student</th>${subjectsList.map(s => `<th>${s}</th>`).join('')}<th>Class Rank</th><th>Overall Rank</th><th>NGP</th></tr></thead>
+            <thead><tr><th>Student</th>${subjectsList.map(s => `<th>${escapeHTML(s)}</th>`).join('')}<th>Class Rank</th><th>Overall Rank</th><th>NGP</th></tr></thead>
             <tbody>`;
 
         studentRows.forEach(row => {
-            html += `<tr><td>${row.name}</td>`;
+            html += `<tr><td>${escapeHTML(row.name)}</td>`;
             subjectsList.forEach(sub => {
                 const mark = row.subjects[sub];
                 const grade = mark !== undefined ? getGrade(mark) : '--';
@@ -1277,9 +1335,9 @@ async function runGlobalAnalysis() {
         });
 
         let heading = '📊 Analysis Summary';
-        if (selectedClass !== '__all__') heading += ` – Class: ${selectedClass}`;
+        if (selectedClass !== '__all__') heading += ` – Class: ${escapeHTML(selectedClass)}`;
         else heading += ' – All Classes';
-        if (selectedTerm) heading += ` – Term: ${selectedTerm}`;
+        if (selectedTerm) heading += ` – Term: ${escapeHTML(selectedTerm)}`;
 
         let html = `<h4 class="mb-12">${heading}</h4>`;
 
@@ -1303,7 +1361,7 @@ async function runGlobalAnalysis() {
 
             html += `
             <div class="table-wrapper" style="margin-bottom:24px;">
-                <h5>${subject}</h5>
+                <h5>${escapeHTML(subject)}</h5>
                 <table>
                     <thead>
                         <tr><th>Total</th><th>Pass (A-C)</th><th>% Pass</th><th>Fail (C--F)</th><th>% Fail</th><th>GPMP</th></tr>
@@ -1937,16 +1995,20 @@ async function loadAdminCodes() {
             html += `
                 <div style="background:rgba(255,255,255,0.05); padding:12px; border-radius:8px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
                     <div style="flex:1; min-width:200px;">
-                        <strong>${data.name || 'Unknown'}</strong> (${doc.id}) – ${userType.toUpperCase()}
-                        <br><small>${userType === 'student' ? 'Class: '+ (extra.class || '?') : 'Role: '+ (extra.role || '?') +' | Subject: '+ (extra.subject || '?')}</small>
-                        <br><span style="font-size:1.3rem; font-weight:bold; color:${expired ? '#e24a4a' : '#4acd8d'};">${codeDisplay}</span>
+                        <strong>${escapeHTML(data.name || 'Unknown')}</strong> (${escapeHTML(doc.id)}) – ${escapeHTML(userType.toUpperCase())}
+                        <br><small>${userType === 'student' ? 'Class: '+ escapeHTML(extra.class || '?') : 'Role: '+ escapeHTML(extra.role || '?') +' | Subject: '+ escapeHTML(extra.subject || '?')}</small>
+                        <br><span style="font-size:1.3rem; font-weight:bold; color:${expired ? '#e24a4a' : '#4acd8d'};">${escapeHTML(codeDisplay)}</span>
                     </div>
-                    <button class="btn btn-sm btn-outline" onclick="deleteCode('${doc.id}')">🗑️</button>
+                    <button class="btn btn-sm btn-outline" data-action="delete-code" data-code-id="${escapeHTML(doc.id)}">🗑️</button>
                 </div>`;
         });
         container.innerHTML = html;
+
+        container.querySelectorAll('button[data-action="delete-code"]').forEach(btn => {
+            btn.addEventListener('click', () => deleteCode(btn.dataset.codeId));
+        });
     } catch (err) {
-        container.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+        container.innerHTML = `<p class="text-danger">Error: ${escapeHTML(err.message)}</p>`;
     }
 }
 
@@ -2082,7 +2144,7 @@ async function printStudentRanking(className, term) {
             studentList.forEach(s => Object.keys(s.subjects).forEach(sub => allSubjects.add(sub)));
             const subjectsSorted = Array.from(allSubjects).sort();
 
-            let html = `<h3>Class: ${className} | ${term ? 'Term: ' + term : 'All Terms'}</h3>`;
+            let html = `<h3>Class: ${escapeHTML(className)} | ${term ? 'Term: ' + escapeHTML(term) : 'All Terms'}</h3>`;
             html += `<table>
                 <thead>
                     <tr>
@@ -2090,7 +2152,7 @@ async function printStudentRanking(className, term) {
                         <th>Student Name</th>
                         <th>IC No.</th>
                         <th>Class</th>`;
-            subjectsSorted.forEach(sub => html += `<th>${sub}</th>`);
+            subjectsSorted.forEach(sub => html += `<th>${escapeHTML(sub)}</th>`);
             html += `<th>Class Rank</th><th>Overall Rank</th><th>GP</th></tr></thead><tbody>`;
 
             let counter = 1;
@@ -2098,9 +2160,9 @@ async function printStudentRanking(className, term) {
                 const avgNgp = s.ngpCount > 0 ? (s.ngpTotal / s.ngpCount).toFixed(2) : '0.00';
                 html += `<tr>
                     <td>${counter++}</td>
-                    <td>${s.name}</td>
-                    <td>${s.id}</td>
-                    <td>${s.class}</td>`;
+                    <td>${escapeHTML(s.name)}</td>
+                    <td>${escapeHTML(s.id)}</td>
+                    <td>${escapeHTML(s.class)}</td>`;
                 subjectsSorted.forEach(sub => {
                     const mark = s.subjects[sub];
                     const grade = mark !== undefined ? getGrade(mark) : '--';
@@ -2153,7 +2215,7 @@ async function printStudentRanking(className, term) {
             return;
         }
 
-        // ---------- MODE 2: ALL CLASSES → RANKING REPORT (unchanged) ----------
+        // ---------- MODE 2: ALL CLASSES → RANKING REPORT ----------
         let studentsQuery = db.collection('students');
         const studentsSnap = await studentsQuery.get();
         if (studentsSnap.empty) {
@@ -2278,7 +2340,7 @@ async function printStudentRanking(className, term) {
         let html = '';
         let counter = 1;
         for (const cls of sortedClasses) {
-            html += `<h3>Kelas: ${cls}</h3>`;
+            html += `<h3>Kelas: ${escapeHTML(cls)}</h3>`;
             html += `<table>
                 <thead>
                     <tr>
@@ -2295,13 +2357,13 @@ async function printStudentRanking(className, term) {
                 <tbody>`;
             const studentsInClass = classGroups[cls];
             studentsInClass.forEach(s => {
-                const subjectLines = Object.entries(s.subjectsAvg).map(([subj, ngp]) => `${subj}: ${ngp}`);
+                const subjectLines = Object.entries(s.subjectsAvg).map(([subj, ngp]) => `${escapeHTML(subj)}: ${ngp}`);
                 const subjectStr = subjectLines.join('<br>');
                 html += `<tr>
                     <td>${counter++}</td>
-                    <td>${s.name}</td>
-                    <td>${s.id}</td>
-                    <td>${s.class}</td>
+                    <td>${escapeHTML(s.name)}</td>
+                    <td>${escapeHTML(s.id)}</td>
+                    <td>${escapeHTML(s.class)}</td>
                     <td>${s.classRank}</td>
                     <td>${s.overallRank}</td>
                     <td><strong>${s.avgNgp.toFixed(2)}</strong></td>
@@ -2341,7 +2403,7 @@ async function printStudentRanking(className, term) {
                     <h1>Pusat Tingkatan Enam SMK Badin</h1>
                 </div>
                 <h2>Overall Examination Analysis</h2>
-                <p>Overall Classes | ${term ? 'Term: ' + term : 'All Terms'}</p>
+                <p>Overall Classes | ${term ? 'Term: ' + escapeHTML(term) : 'All Terms'}</p>
                 ${html}
             </body>
             </html>
@@ -2418,9 +2480,9 @@ async function printStudentSlip(studentId, className) {
                 <h2>Student Examination Slip</h2>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-                <div><strong>Name:</strong> ${studentName}</div>
-                <div><strong>IC No.:</strong> ${studentId}</div>
-                <div><strong>Class:</strong> ${className}</div>
+                <div><strong>Name:</strong> ${escapeHTML(studentName)}</div>
+                <div><strong>IC No.:</strong> ${escapeHTML(studentId)}</div>
+                <div><strong>Class:</strong> ${escapeHTML(className)}</div>
             </div>
             <div style="display: flex; justify-content: space-around; margin-bottom: 20px; background: #f8f9fa; padding: 10px; border: 1px solid #ccc;">
                 <div>🏅 <strong>Class Rank:</strong> ${classRank} / ${classSize}</div>
@@ -2436,8 +2498,8 @@ async function printStudentSlip(studentId, className) {
 
         studentResults.forEach(r => {
             slipHTML += `<tr>
-                <td>${r.subject}</td>
-                <td>${r.term}</td>
+                <td>${escapeHTML(r.subject)}</td>
+                <td>${escapeHTML(r.term)}</td>
                 <td>${r.marks}</td>
                 <td>${getGrade(r.marks)}</td>
                 <td>${getNGP(r.marks).toFixed(2)}</td>
@@ -2446,7 +2508,7 @@ async function printStudentSlip(studentId, className) {
         slipHTML += `</tbody></table>`;
 
         if (studentData.muet && studentData.muet.band) {
-            slipHTML += `<div style="margin-top: 20px;"><strong>MUET Band:</strong> ${studentData.muet.band}</div>`;
+            slipHTML += `<div style="margin-top: 20px;"><strong>MUET Band:</strong> ${escapeHTML(studentData.muet.band)}</div>`;
         }
 
         slipHTML += `</div>`;
