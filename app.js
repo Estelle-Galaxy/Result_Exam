@@ -1319,12 +1319,13 @@ async function runAnalysis() {
             classRankMap[sortedByAvg[i].id] = classRank;
         }
 
-        // Overall school ranking (all students, all results)
+        // Overall school ranking (all students, all results).
+        // NOTE: we no longer use `where('studentId', 'in', allStudentIds)` because
+        // Firestore caps `in` at 10 values. Instead we read the whole results
+        // collection once and filter in memory.
         let overallRankMap = {};
         try {
-            const allStudentsSnap = await db.collection('students').get();
-            const allStudentIds = allStudentsSnap.docs.map(d => d.id);
-            const allResSnap = await db.collection('results').where('studentId', 'in', allStudentIds).get();
+            const allResSnap = await db.collection('results').get();
             const ngpTotals = {};
             allResSnap.forEach(doc => {
                 const r = doc.data();
@@ -2412,12 +2413,12 @@ async function printStudentRanking(className, term) {
                 classRankMap[sortedByAvg[i].id] = cRank;
             }
 
-            // Overall school ranking (all students, all results, all terms)
+            // Overall school ranking (all students, all results, all terms).
+            // NOTE: we no longer use `where('studentId', 'in', allStudentIds)`
+            // (Firestore caps `in` at 10). Read all results once instead.
             let overallRankMap = {};
             try {
-                const allStudentsSnap = await db.collection('students').get();
-                const allStudentIds = allStudentsSnap.docs.map(d => d.id);
-                const allResSnap = await db.collection('results').where('studentId', 'in', allStudentIds).get();
+                const allResSnap = await db.collection('results').get();
                 const ngpTotals = {};
                 allResSnap.forEach(doc => {
                     const r = doc.data();
@@ -2723,9 +2724,13 @@ async function printStudentRanking(className, term) {
 }
 
 // ========== INDIVIDUAL STUDENT SLIP (with class & overall ranking) ==========
+// REWRITTEN: no longer uses `where('studentId', 'in', ...)` (Firestore caps
+// `in` at 10 values). Fetches all students and all results once, then filters
+// in memory. Handles empty classes and ties correctly.
 async function printStudentSlip(studentId, className) {
     showLoading();
     try {
+        // 1. Student doc
         const studentDoc = await db.collection('students').doc(studentId).get();
         if (!studentDoc.exists) {
             showToast('Student not found.', 'error');
@@ -2735,48 +2740,82 @@ async function printStudentSlip(studentId, className) {
         const studentData = studentDoc.data();
         const studentName = studentData.name;
 
-        const resultsSnap = await db.collection('results').where('studentId', '==', studentId).get();
-        const studentResults = resultsSnap.docs.map(doc => doc.data());
+        // 2. This student's own results
+        const ownResultsSnap = await db.collection('results')
+            .where('studentId', '==', studentId).get();
+        const studentResults = ownResultsSnap.docs.map(doc => doc.data());
 
-        // Class ranking
-        const classStudentsSnap = await db.collection('students').where('class', '==', className).get();
-        const classStudentIds = classStudentsSnap.docs.map(doc => doc.id);
-        const classResultsSnap = await db.collection('results').where('studentId', 'in', classStudentIds).get();
+        // 3. Fetch ALL students + ALL results once, then filter in memory.
+        //    (Avoids Firestore's 10-item limit on `in` queries.)
+        const [allStudentsSnap, allResultsSnap] = await Promise.all([
+            db.collection('students').get(),
+            db.collection('results').get()
+        ]);
 
-        const classNgpMap = {};
-        classResultsSnap.forEach(doc => {
-            const r = doc.data();
-            if (!classNgpMap[r.studentId]) classNgpMap[r.studentId] = { totalNgp: 0, count: 0 };
-            classNgpMap[r.studentId].totalNgp += getNGP(r.marks);
-            classNgpMap[r.studentId].count += 1;
+        const allStudentsMap = {};     // id -> { name, class }
+        allStudentsSnap.forEach(doc => {
+            allStudentsMap[doc.id] = { name: doc.data().name, class: doc.data().class };
         });
-        const classAverages = Object.entries(classNgpMap).map(([id, data]) => ({
-            id,
-            avgNgp: data.totalNgp / data.count
-        }));
-        classAverages.sort((a, b) => b.avgNgp - a.avgNgp);
-        const classRank = classAverages.findIndex(s => s.id === studentId) + 1;
-        const classSize = classAverages.length;
 
-        // Overall ranking
-        const allStudentsSnap = await db.collection('students').get();
-        const allStudentIds = allStudentsSnap.docs.map(doc => doc.id);
-        const allResultsSnap = await db.collection('results').where('studentId', 'in', allStudentIds).get();
-        const overallNgpMap = {};
+        // Build NGP averages per student
+        const ngpByStudent = {};       // id -> { totalNgp, count }
         allResultsSnap.forEach(doc => {
             const r = doc.data();
-            if (!overallNgpMap[r.studentId]) overallNgpMap[r.studentId] = { totalNgp: 0, count: 0 };
-            overallNgpMap[r.studentId].totalNgp += getNGP(r.marks);
-            overallNgpMap[r.studentId].count += 1;
+            if (!ngpByStudent[r.studentId]) ngpByStudent[r.studentId] = { totalNgp: 0, count: 0 };
+            ngpByStudent[r.studentId].totalNgp += getNGP(r.marks);
+            ngpByStudent[r.studentId].count += 1;
         });
-        const overallAverages = Object.entries(overallNgpMap).map(([id, data]) => ({
-            id,
-            avgNgp: data.totalNgp / data.count
-        }));
-        overallAverages.sort((a, b) => b.avgNgp - a.avgNgp);
-        const overallRank = overallAverages.findIndex(s => s.id === studentId) + 1;
-        const totalStudents = overallAverages.length;
 
+        // 4. Class ranking — only students whose class matches
+        const classAverages = [];
+        for (const [id, data] of Object.entries(ngpByStudent)) {
+            const stu = allStudentsMap[id];
+            if (!stu || stu.class !== className) continue;
+            if (data.count === 0) continue;
+            classAverages.push({ id, avgNgp: data.totalNgp / data.count });
+        }
+        classAverages.sort((a, b) => b.avgNgp - a.avgNgp);
+
+        let classRank = 0;
+        const classSize = classAverages.length;
+        let prevClassAvg = classAverages[0]?.avgNgp;
+        let runningRank = 1;
+        for (let i = 0; i < classAverages.length; i++) {
+            if (classAverages[i].avgNgp < prevClassAvg) {
+                runningRank = i + 1;
+                prevClassAvg = classAverages[i].avgNgp;
+            }
+            if (classAverages[i].id === studentId) {
+                classRank = runningRank;
+                break;
+            }
+        }
+
+        // 5. Overall school ranking — everyone
+        const overallAverages = Object.entries(ngpByStudent)
+            .filter(([, d]) => d.count > 0)
+            .map(([id, d]) => ({ id, avgNgp: d.totalNgp / d.count }));
+        overallAverages.sort((a, b) => b.avgNgp - a.avgNgp);
+
+        let overallRank = 0;
+        const totalStudents = overallAverages.length;
+        let prevOverallAvg = overallAverages[0]?.avgNgp;
+        let runningOverall = 1;
+        for (let i = 0; i < overallAverages.length; i++) {
+            if (overallAverages[i].avgNgp < prevOverallAvg) {
+                runningOverall = i + 1;
+                prevOverallAvg = overallAverages[i].avgNgp;
+            }
+            if (overallAverages[i].id === studentId) {
+                overallRank = runningOverall;
+                break;
+            }
+        }
+
+        const classRankText = classRank || 'N/A';
+        const overallRankText = overallRank || 'N/A';
+
+        // 6. Build the slip HTML
         let slipHTML = `<div style="font-family: 'Segoe UI', sans-serif; padding: 20px; max-width: 800px;">
             <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
                 <h1>Pusat Tingkatan Enam SMK Badin</h1>
@@ -2788,8 +2827,8 @@ async function printStudentSlip(studentId, className) {
                 <div><strong>Class:</strong> ${escapeHTML(className)}</div>
             </div>
             <div style="display: flex; justify-content: space-around; margin-bottom: 20px; background: #f8f9fa; padding: 10px; border: 1px solid #ccc;">
-                <div>🏅 <strong>Class Rank:</strong> ${classRank} / ${classSize}</div>
-                <div>🌍 <strong>Overall School Rank:</strong> ${overallRank} / ${totalStudents}</div>
+                <div>🏅 <strong>Class Rank:</strong> ${classRankText} / ${classSize}</div>
+                <div>🌍 <strong>Overall School Rank:</strong> ${overallRankText} / ${totalStudents}</div>
             </div>
             <table style="border-collapse: collapse; width: 100%;">
                 <thead>
@@ -2829,7 +2868,7 @@ async function printStudentSlip(studentId, className) {
         setTimeout(() => { printWindow.print(); printWindow.close(); }, 800);
     } catch (error) {
         console.error('Error generating slip:', error);
-        showToast('Failed to generate slip.', 'error');
+        showToast('Failed to generate slip: ' + (error.message || 'unknown error'), 'error');
     }
     hideLoading();
 }
@@ -2848,7 +2887,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('resetPasswordForm').addEventListener('submit', handlePasswordReset);
     document.getElementById('profileForm').addEventListener('submit', handleProfileSave);
 
-    // NEW: reassign modal form listener
+    // Reassign modal form listener
     const reassignForm = document.getElementById('reassignForm');
     if (reassignForm) {
         reassignForm.addEventListener('submit', async (e) => {
@@ -2868,7 +2907,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Overlay click-outside handler — now includes reassignModalOverlay
+    // Overlay click-outside handler
     ['resultModalOverlay','addClassModalOverlay','muetModalOverlay','resetPasswordModalOverlay',
      'analysisModalOverlay','globalAnalysisModalOverlay','reassignModalOverlay'].forEach(id => {
         const overlay = document.getElementById(id);
