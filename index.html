@@ -85,13 +85,12 @@
             </div>
         </div>
 
-        <!-- ========== PAGE: Student Results (UPDATED) ========== -->
+        <!-- ========== PAGE: Student Results ========== -->
         <div class="page" id="page-student-results">
             <div class="card wide">
                 <div class="flex-between mb-16">
                     <div style="display: flex; gap: 8px;">
                         <button class="btn btn-sm btn-outline btn-auto" onclick="handleLogout()">← Logout</button>
-                        <!-- NEW: Term filter dropdown + filtered print button -->
                         <select id="studentPrintTermFilter" class="btn btn-sm btn-outline btn-auto" style="min-width:150px;" onchange="filterStudentResultsView()">
                             <option value="">All Semesters</option>
                             <option value="Sem 1">Sem 1</option>
@@ -159,9 +158,13 @@
                 <div id="classListContent">
                     <p class="text-center text-light">Loading classes...</p>
                 </div>
-                <div class="text-center mt-16">
+                <div class="text-center mt-16" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
                     <button class="btn btn-outline btn-sm btn-auto" onclick="openGlobalAnalysisModal()">
                         📊 Exam Analysis
+                    </button>
+                    <!-- NEW: opens the orphan reassignment modal -->
+                    <button class="btn btn-outline btn-sm btn-auto" onclick="openReassignModal()">
+                        🧹 Reassign Orphaned Students
                     </button>
                 </div>
                 <div class="mt-16">
@@ -211,7 +214,6 @@
                             <option value="">-- Select Class --</option>
                         </select>
                     </div>
-                    <!-- No password field – set later -->
                     <button type="submit" class="btn btn-primary" id="regStudentBtn">📧 Send Verification Code</button>
                 </form>
             </div>
@@ -262,7 +264,6 @@
                             <option value="None">None</option>
                         </select>
                     </div>
-                    <!-- No password field -->
                     <button type="submit" class="btn btn-accent" id="regTeacherBtn">📧 Send Verification Code</button>
                 </form>
             </div>
@@ -368,6 +369,32 @@
                     </div>
                     <button type="submit" class="btn btn-primary" id="profileSaveBtn">💾 Save Changes</button>
                 </form>
+
+                <!-- ============================================================
+                     NEW: DELETE MY ACCOUNT
+                     These two buttons toggle visibility based on user type.
+                     Only the visible one can be clicked.
+                     ============================================================ -->
+                <div class="section-divider mt-20" style="border-top: 1px solid rgba(255,255,255,0.15); padding-top: 16px;">
+                    <h4 style="margin-bottom: 8px;">⚠️ Danger Zone</h4>
+                    <p class="small-text text-light" style="margin-bottom: 12px;">
+                        Deleting your account is permanent. All your data will be removed and cannot be recovered.
+                    </p>
+                    <button type="button"
+                            class="btn btn-danger"
+                            id="deleteStudentAccountBtn"
+                            style="display: none;"
+                            onclick="deleteOwnStudentAccount()">
+                        🗑️ Delete My Student Account
+                    </button>
+                    <button type="button"
+                            class="btn btn-danger"
+                            id="deleteTeacherAccountBtn"
+                            style="display: none;"
+                            onclick="deleteOwnTeacherAccount()">
+                        🗑️ Delete My Teacher Account
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -458,7 +485,7 @@
         </div>
     </div>
 
-    <!-- ========== MUET MODAL (FIXED – partial saves enabled) ========== -->
+    <!-- ========== MUET MODAL ========== -->
     <div class="modal-overlay" id="muetModalOverlay">
         <div class="modal" id="muetModal" style="max-width: 550px;">
             <button type="button" class="modal-close" onclick="closeMuetModal()">✕</button>
@@ -592,6 +619,40 @@
                     <p class="text-center text-light">Select filters to view analysis.</p>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         NEW: REASSIGN ORPHANED STUDENTS MODAL
+         Opens from the teacher dashboard. Lets the teacher move
+         students who belonged to a now-deleted class into an
+         existing class. Students are UPDATED, never deleted.
+         ============================================================ -->
+    <div class="modal-overlay" id="reassignModalOverlay">
+        <div class="modal" id="reassignModal" style="max-width: 550px;">
+            <button type="button" class="modal-close" onclick="closeReassignModal()">✕</button>
+            <h3>🧹 Reassign Orphaned Students</h3>
+            <p class="small-text text-light" style="margin-bottom: 16px;">
+                After a class is deleted, its students remain in the system but are no longer
+                attached to any class. Use this tool to move them into an existing class.
+                Students and their results are updated, never deleted.
+            </p>
+            <form id="reassignForm" onsubmit="return false;">
+                <div class="form-group">
+                    <label for="orphanOldClassSelect">Old Class (deleted)</label>
+                    <select id="orphanOldClassSelect" required>
+                        <option value="">-- Loading orphaned classes... --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="orphanNewClassSelect">Move to Class</label>
+                    <select id="orphanNewClassSelect" required>
+                        <option value="">-- Select target class --</option>
+                    </select>
+                </div>
+                <div id="orphanPreview" class="mb-12 small-text text-light"></div>
+                <button type="submit" class="btn btn-primary" id="reassignBtn">🔄 Reassign Students</button>
+            </form>
         </div>
     </div>
 
