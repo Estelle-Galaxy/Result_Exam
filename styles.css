@@ -31,14 +31,14 @@ body {
 }
 
 @media (min-aspect-ratio: 16/9) {
-    .video-background{
+    .video-background {
         width: 100%;
         height: auto;
     }
 }
 
 @media (max-aspect-ratio: 16/9) {
-    .video-background{
+    .video-background {
         width: auto;
         height: 100%;
     }
@@ -130,7 +130,7 @@ body {
 }
 .btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 .btn:active {
     transform: translateY(0);
@@ -148,11 +148,19 @@ body {
     color: #cbd5e1;
 }
 .btn-outline:hover {
-    background: rgba(255,255,255,0.05);
+    background: rgba(255, 255, 255, 0.05);
     border-color: #64748b;
 }
+/* Consolidated danger button — used by class deletion, student deletion,
+   self-delete buttons, and the result-row delete button. */
 .btn-danger {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
+    background: #dc2626;
+    color: #fff;
+    border: 1px solid #b91c1c;
+}
+.btn-danger:hover {
+    background: #b91c1c;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
 }
 .btn-sm {
     padding: 8px 16px;
@@ -175,14 +183,16 @@ body {
 .btn-group .btn {
     flex: 1;
 }
+
+/* ===== Spacing Utilities ===== */
+.mb-8  { margin-bottom: 8px; }
 .mb-12 { margin-bottom: 12px; }
 .mb-16 { margin-bottom: 16px; }
-.mt-16 { margin-top: 16px; }
+.mb-24 { margin-bottom: 24px; }
 .mt-8  { margin-top: 8px; }
 .mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
 .mt-20 { margin-top: 20px; }
-.mb-8  { margin-bottom: 8px; }
-.mb-24 { margin-bottom: 24px; }
 
 /* ===== Form Elements ===== */
 .form-group {
@@ -208,7 +218,7 @@ body {
 }
 .form-group select {
     color: #000000;
-    background: rgba(128, 128, 128, 0.3);  /* transparent gray for select dropdowns */
+    background: rgba(128, 128, 128, 0.3);
 }
 .form-group input:focus,
 .form-group select:focus {
@@ -247,26 +257,27 @@ tr:last-child td {
     border-bottom: none;
 }
 
-/* ===== Badges ===== */
+/* ===== Badges (grades + MUET) ===== */
 .badge {
     padding: 4px 10px;
     border-radius: 12px;
     font-size: 0.8rem;
     font-weight: 600;
+    display: inline-block;
 }
-.badge-a   { background: #22c55e; color: #052e16; }
-.badge-a-  { background: #4ade80; color: #052e16; }
-.badge-b\+ { background: #86efac; color: #052e16; }
-.badge-b   { background: #facc15; color: #422006; }
-.badge-b-  { background: #fde047; color: #422006; }
-.badge-c\+ { background: #f97316; color: #431407; }
-.badge-c   { background: #f97316; color: #431407; }
-.badge-c-  { background: #fb923c; color: #431407; }
-.badge-d\+ { background: #ef4444; color: #450a0a; }
-.badge-d   { background: #ef4444; color: #450a0a; }
-.badge-f   { background: #b91c1c; color: #fee2e2; }
+.badge-a    { background: #22c55e; color: #052e16; }
+.badge-a-   { background: #4ade80; color: #052e16; }
+.badge-b\+  { background: #86efac; color: #052e16; }
+.badge-b    { background: #facc15; color: #422006; }
+.badge-b-   { background: #fde047; color: #422006; }
+.badge-c\+  { background: #f97316; color: #431407; }
+.badge-c    { background: #f97316; color: #431407; }
+.badge-c-   { background: #fb923c; color: #431407; }
+.badge-d\+  { background: #ef4444; color: #450a0a; }
+.badge-d    { background: #ef4444; color: #450a0a; }
+.badge-f    { background: #b91c1c; color: #fee2e2; }
 
-/* ===== Result Summary ===== */
+/* ===== Result Summary & Term Headings ===== */
 .result-summary {
     background: rgba(56, 189, 248, 0.15);
     padding: 12px 20px;
@@ -284,6 +295,12 @@ tr:last-child td {
     color: #38bdf8;
 }
 
+/* ===== Status Badges =====
+   Used by both the on-page student results and the print slip.
+   .green  → Class Position
+   .blue   → Academic Status
+   .orange → Overall School Rank
+*/
 .status-container {
     display: flex;
     gap: 12px;
@@ -294,12 +311,12 @@ tr:last-child td {
     min-width: 180px;
     padding: 12px;
     border-radius: 8px;
-    background: rgba(255,255,255,0.05);
+    background: rgba(255, 255, 255, 0.05);
     text-align: center;
 }
 .status-badge.green  { border: 1px solid #22c55e; color: #4ade80; }
 .status-badge.blue   { border: 1px solid #3b82f6; color: #60a5fa; }
-.status-badge.orange { border: 1px solid #f59e0b; color: #fbbf24; }  /* NEW – for overall school rank */
+.status-badge.orange { border: 1px solid #f59e0b; color: #fbbf24; }
 
 /* ===== Loading Overlay ===== */
 .loading-overlay {
@@ -308,7 +325,7 @@ tr:last-child td {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(4px);
     display: none;
     justify-content: center;
@@ -325,7 +342,7 @@ tr:last-child td {
 .spinner {
     width: 48px;
     height: 48px;
-    border: 4px solid rgba(255,255,255,0.3);
+    border: 4px solid rgba(255, 255, 255, 0.3);
     border-top: 4px solid #38bdf8;
     border-radius: 50%;
     animation: spin 1s linear infinite;
@@ -350,7 +367,7 @@ tr:last-child td {
     border-radius: 8px;
     background: #1e293b;
     color: #f1f5f9;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     animation: slideIn 0.3s ease;
     max-width: 300px;
     border-left: 4px solid #38bdf8;
@@ -369,7 +386,7 @@ tr:last-child td {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0,0,0,0.7);
+    background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(4px);
     display: none;
     justify-content: center;
@@ -417,7 +434,7 @@ tr:last-child td {
 .scrollable-list {
     max-height: 200px;
     overflow-y: auto;
-    background: rgba(0,0,0,0.2);
+    background: rgba(0, 0, 0, 0.2);
     border-radius: 8px;
     padding: 12px;
 }
@@ -433,13 +450,15 @@ tr:last-child td {
     border-bottom: none;
 }
 .delete-btn {
-    background: #ef4444;
     margin-left: 12px;
 }
 
+/* ===== Section Divider =====
+   Used by the profile "Danger Zone" and the result modal. */
 .section-divider {
     border-top: 1px solid #334155;
     padding-top: 20px;
+    margin-top: 24px;
 }
 
 /* ===== Class List ===== */
@@ -524,7 +543,7 @@ tr:last-child td {
     text-decoration: underline;
 }
 
-/* Analysis modal table */
+/* Analysis modal tables */
 #analysisContent table,
 #globalAnalysisContent table {
     width: 100%;
@@ -539,53 +558,38 @@ tr:last-child td {
     text-align: center;
 }
 
-/* ---------- COUNTDOWN TIMER (Verification Page) ---------- */
+/* ===== Countdown Timer (Verification page) ===== */
 .countdown-box {
-  text-align: center;
-  margin: 1.5rem 0;
-  padding: 1rem;
-  background: rgba(255,255,255,0.08);
-  border-radius: 12px;
+    text-align: center;
+    margin: 1.5rem 0;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
 }
 .countdown-label {
-  font-size: 0.9rem;
-  color: #aaa;
-  display: block;
-  margin-bottom: 0.3rem;
+    font-size: 0.9rem;
+    color: #aaa;
+    display: block;
+    margin-bottom: 0.3rem;
 }
 .countdown-value {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #4a90e2;
-  letter-spacing: 2px;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #4a90e2;
+    letter-spacing: 2px;
 }
 
-/* When the dropdown is open, the options inside will have black text on a white background */
+/* ===== Term-filter dropdown ===== */
 #studentPrintTermFilter option {
-  color: #000000;          /* black text for readability */
-  background-color: #ffffff;
+    color: #000000;
+    background-color: #ffffff;
 }
-
-/* Optional: change the hover background for clarity */
 #studentPrintTermFilter option:hover {
-  background-color: #e2e8f0;  /* light grey highlight */
-  color: #000000;
+    background-color: #e2e8f0;
+    color: #000000;
 }
 
-/* Danger zone buttons */
-.btn-danger {
-    background: #dc2626;
-    color: #fff;
-    border: 1px solid #b91c1c;
-}
-.btn-danger:hover {
-    background: #b91c1c;
-}
-.section-divider {
-    margin-top: 24px;
-}
-
-/* Reassign modal preview */
+/* ===== Reassign modal preview ===== */
 #orphanPreview {
     min-height: 1.2em;
     font-style: italic;
