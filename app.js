@@ -1,8 +1,3 @@
-// app.js – Complete system with OTP verification, admin panel, per‑subject grade distribution analysis,
-// new MUET section marks, student details in printed slip, filtered student printing,
-// teacher analysis student data with class/overall ranks, individual exam slip with rankings,
-// and student ranking displayed in printable results.
-
 // ========== FIREBASE CONFIGURATION ==========
 const firebaseConfig = {
     apiKey: "AIzaSyCBjA_xaSAJdweodUsEMzvGY5R69I3esgE",
@@ -865,20 +860,138 @@ async function deleteResult(resultId) {
     hideLoading();
 }
 
+// ========== STUDENT DELETION (teacher action) ==========
+// The only place a teacher can remove a student. Also cleans up:
+//   • the student doc
+//   • all their results
+//   • their ID in any class roster array
 async function deleteStudent(studentId, className) {
-    if (!confirm(`Are you sure you want to permanently delete student "${studentId}"?`)) return;
+    if (!confirm(`Are you sure you want to permanently delete student "${studentId}"?\n\nThis will also delete all their results. This cannot be undone.`)) return;
     showLoading();
     try {
+        // 1. Delete student doc
         await db.collection('students').doc(studentId).delete();
+
+        // 2. Delete all their results
         const resultsSnap = await db.collection('results').where('studentId', '==', studentId).get();
         const batch = db.batch();
         resultsSnap.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
+
+        // 3. Remove their ID from any class roster array
+        try {
+            const classesSnap = await db.collection('classes').get();
+            const classBatch = db.batch();
+            classesSnap.forEach(c => {
+                const arr = c.data().students;
+                if (Array.isArray(arr) && arr.includes(studentId)) {
+                    classBatch.update(c.ref, {
+                        students: firebase.firestore.FieldValue.arrayRemove(studentId)
+                    });
+                }
+            });
+            await classBatch.commit();
+        } catch (err) {
+            console.warn('Could not clean class rosters:', err);
+        }
+
         showToast('Student deleted successfully!', 'success');
         loadClassStudents(className);
     } catch (error) {
         console.error('Error deleting student:', error);
         showToast('Failed to delete student.', 'error');
+    }
+    hideLoading();
+}
+
+// ========== STUDENT SELF-DELETE (own account) ==========
+// Only place a student can remove themselves. Removes student doc, results,
+// and roster entry. Does NOT touch any class or teacher records.
+async function deleteOwnStudentAccount() {
+    const studentId = sessionStorage.getItem('userId');
+    const userType  = sessionStorage.getItem('userType');
+    if (userType !== 'student' || !studentId) {
+        showToast('You must be logged in as a student.', 'error');
+        return;
+    }
+
+    const typed = prompt(
+        'This will permanently delete your account and all your results.\n' +
+        'Type DELETE to confirm:'
+    );
+    if (typed !== 'DELETE') {
+        showToast('Cancelled.', 'info');
+        return;
+    }
+
+    showLoading();
+    try {
+        // 1. Delete results
+        const resultsSnap = await db.collection('results')
+            .where('studentId', '==', studentId).get();
+        const batch = db.batch();
+        resultsSnap.forEach(doc => batch.delete(doc.ref));
+
+        // 2. Delete student doc
+        batch.delete(db.collection('students').doc(studentId));
+        await batch.commit();
+
+        // 3. Remove from any class roster array
+        try {
+            const classesSnap = await db.collection('classes').get();
+            const classBatch = db.batch();
+            classesSnap.forEach(c => {
+                const arr = c.data().students;
+                if (Array.isArray(arr) && arr.includes(studentId)) {
+                    classBatch.update(c.ref, {
+                        students: firebase.firestore.FieldValue.arrayRemove(studentId)
+                    });
+                }
+            });
+            await classBatch.commit();
+        } catch (err) {
+            console.warn('Could not clean class rosters:', err);
+        }
+
+        sessionStorage.clear();
+        showToast('Your account has been deleted.', 'success');
+        navigateTo('main');
+    } catch (err) {
+        console.error('Self-delete failed:', err);
+        showToast('Failed to delete account.', 'error');
+    }
+    hideLoading();
+}
+
+// ========== TEACHER SELF-DELETE (own account) ==========
+// Only place a teacher can remove themselves. Removes only the teacher doc.
+// Never touches students or results.
+async function deleteOwnTeacherAccount() {
+    const staffId  = sessionStorage.getItem('userId');
+    const userType = sessionStorage.getItem('userType');
+    if (userType !== 'teacher' || !staffId) {
+        showToast('You must be logged in as a teacher.', 'error');
+        return;
+    }
+
+    const typed = prompt(
+        'This will permanently delete your teacher account.\n' +
+        'Type DELETE to confirm:'
+    );
+    if (typed !== 'DELETE') {
+        showToast('Cancelled.', 'info');
+        return;
+    }
+
+    showLoading();
+    try {
+        await db.collection('teachers').doc(staffId).delete();
+        sessionStorage.clear();
+        showToast('Teacher account deleted.', 'success');
+        navigateTo('main');
+    } catch (err) {
+        console.error('Teacher self-delete failed:', err);
+        showToast('Failed to delete account.', 'error');
     }
     hideLoading();
 }
@@ -1541,18 +1654,202 @@ async function handleSaveClass(event) {
     hideLoading();
 }
 
+// ========== CLASS DELETION (NON-DESTRUCTIVE TO STUDENTS) ==========
+// Deletes ONLY the class document. Students, results, and teachers are preserved.
+// Teachers whose homeroomClass pointed to this class get that field cleared
+// (their account is preserved). Orphaned students can be reassigned afterwards
+// via reassignOrphanedStudents().
 async function deleteClass(className) {
-    if (!confirm(`Are you sure you want to delete the class "${className}"?`)) return;
+    if (!className) return;
+
+    showLoading();
+    let enrolledCount = 0;
+    try {
+        // Just COUNT enrolled students — we will never delete them here.
+        const studentsSnap = await db.collection('students')
+            .where('class', '==', className).get();
+        enrolledCount = studentsSnap.size;
+    } catch (err) {
+        console.error('Could not count enrolled students:', err);
+    }
+    hideLoading();
+
+    let confirmMsg = `Are you sure you want to delete the class "${className}"?\n\n`;
+    if (enrolledCount > 0) {
+        confirmMsg +=
+            `⚠️ ${enrolledCount} student(s) are still enrolled in this class.\n` +
+            `They will NOT be deleted. They will remain in the system without an ` +
+            `assigned class until you reassign them.\n\n`;
+    }
+    confirmMsg += `Only the class record itself will be removed. ` +
+                  `No student, result, or teacher record will be deleted.`;
+
+    if (!confirm(confirmMsg)) return;
+
     showLoading();
     try {
+        // Remove ONLY the class document. Students/results/teachers are untouched.
         await db.collection('classes').doc(className).delete();
-        showToast('Class deleted successfully!', 'success');
+
+        // Tidy up: remove this class from any teacher's homeroomClass field
+        // (again: teachers are NOT deleted, just unassigned).
+        try {
+            const homeroomSnap = await db.collection('teachers')
+                .where('homeroomClass', '==', className).get();
+            if (!homeroomSnap.empty) {
+                const batch = db.batch();
+                homeroomSnap.forEach(doc => batch.update(doc.ref, { homeroomClass: '' }));
+                await batch.commit();
+            }
+        } catch (err) {
+            console.warn('Could not clear homeroom teacher assignments:', err);
+        }
+
+        showToast(
+            enrolledCount > 0
+                ? `Class deleted. ${enrolledCount} student(s) preserved — reassign them to a new class.`
+                : 'Class deleted successfully!',
+            'success'
+        );
         loadTeacherClasses();
     } catch (error) {
         console.error('Error deleting class:', error);
         showToast('Failed to delete class.', 'error');
     }
     hideLoading();
+}
+
+// ========== ORPHANED STUDENT REASSIGNMENT ==========
+// Moves students whose `class` field still points to a deleted class into a new class.
+// Students are UPDATED, never deleted. Results are updated to keep className in sync.
+async function reassignOrphanedStudents(oldClassName, newClassName) {
+    if (!oldClassName || !newClassName) {
+        showToast('Both old and new class names are required.', 'error');
+        return;
+    }
+
+    // Make sure the new class exists
+    const newDoc = await db.collection('classes').doc(newClassName).get();
+    if (!newDoc.exists) {
+        showToast(`Target class "${newClassName}" does not exist.`, 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const studentsSnap = await db.collection('students')
+            .where('class', '==', oldClassName).get();
+
+        if (studentsSnap.empty) {
+            showToast('No orphaned students found for that class.', 'info');
+            hideLoading();
+            return;
+        }
+
+        const batch = db.batch();
+
+        // 1. Reassign each student (students are UPDATED, never deleted)
+        studentsSnap.forEach(doc => {
+            batch.update(doc.ref, { class: newClassName });
+        });
+
+        // 2. Keep results in sync (they store className as a string)
+        const resultsSnap = await db.collection('results')
+            .where('className', '==', oldClassName).get();
+        resultsSnap.forEach(doc => {
+            batch.update(doc.ref, { className: newClassName });
+        });
+
+        await batch.commit();
+
+        showToast(
+            `Reassigned ${studentsSnap.size} student(s) and ${resultsSnap.size} result(s) ` +
+            `to "${newClassName}".`,
+            'success'
+        );
+    } catch (err) {
+        console.error('Reassign failed:', err);
+        showToast('Failed to reassign students.', 'error');
+    }
+    hideLoading();
+}
+
+// ========== REASSIGN ORPHANED STUDENTS (UI) ==========
+// Opens the reassign modal, populates the two dropdowns:
+//   • "Old Class" — orphaned classes (student.class values that no longer
+//     exist in the classes collection)
+//   • "Move to Class" — every existing class
+async function openReassignModal() {
+    const oldSelect = document.getElementById('orphanOldClassSelect');
+    const newSelect = document.getElementById('orphanNewClassSelect');
+    const preview   = document.getElementById('orphanPreview');
+    if (!oldSelect || !newSelect) return;
+
+    oldSelect.innerHTML = '<option value="">-- Loading... --</option>';
+    newSelect.innerHTML = '<option value="">-- Loading... --</option>';
+    if (preview) preview.textContent = '';
+
+    try {
+        // 1. Existing classes (targets)
+        const classesSnap = await db.collection('classes').get();
+        const existingClasses = classesSnap.docs.map(d => d.id).sort();
+
+        newSelect.innerHTML = '<option value="">-- Select target class --</option>';
+        existingClasses.forEach(cls => {
+            const opt = document.createElement('option');
+            opt.value = cls; opt.textContent = cls;
+            newSelect.appendChild(opt);
+        });
+
+        // 2. Orphaned classes = distinct `class` values on students that
+        //    do NOT exist in the classes collection.
+        const studentsSnap = await db.collection('students').get();
+        const orphanCounts = {};
+        studentsSnap.forEach(doc => {
+            const cls = doc.data().class;
+            if (!cls) return;
+            if (!existingClasses.includes(cls)) {
+                orphanCounts[cls] = (orphanCounts[cls] || 0) + 1;
+            }
+        });
+
+        oldSelect.innerHTML = '<option value="">-- Select orphaned class --</option>';
+        const orphans = Object.keys(orphanCounts).sort();
+        if (orphans.length === 0) {
+            oldSelect.innerHTML = '<option value="">(no orphaned students found)</option>';
+        } else {
+            orphans.forEach(cls => {
+                const opt = document.createElement('option');
+                opt.value = cls;
+                opt.textContent = `${cls} (${orphanCounts[cls]} student${orphanCounts[cls] > 1 ? 's' : ''})`;
+                oldSelect.appendChild(opt);
+            });
+        }
+
+        // Live preview when user picks an old class
+        oldSelect.onchange = () => {
+            const chosen = oldSelect.value;
+            if (preview) {
+                preview.textContent = chosen
+                    ? `Will move ${orphanCounts[chosen]} student(s) from "${chosen}".`
+                    : '';
+            }
+        };
+    } catch (err) {
+        console.error('Failed to load reassign data:', err);
+        showToast('Failed to load class data.', 'error');
+    }
+
+    document.getElementById('reassignModalOverlay').classList.add('active');
+}
+
+function closeReassignModal() {
+    const overlay = document.getElementById('reassignModalOverlay');
+    if (overlay) overlay.classList.remove('active');
+    const form = document.getElementById('reassignForm');
+    if (form) form.reset();
+    const preview = document.getElementById('orphanPreview');
+    if (preview) preview.textContent = '';
 }
 
 // ========== PROFILE MANAGEMENT ==========
@@ -1567,6 +1864,12 @@ async function openProfile() {
 
     document.getElementById('profileUserType').value = userType;
     document.getElementById('profileUserId').value = userId;
+
+    // Show the correct self-delete button for the logged-in user
+    const delStuBtn = document.getElementById('deleteStudentAccountBtn');
+    const delTchBtn = document.getElementById('deleteTeacherAccountBtn');
+    if (delStuBtn) delStuBtn.style.display = (userType === 'student') ? 'inline-block' : 'none';
+    if (delTchBtn) delTchBtn.style.display = (userType === 'teacher') ? 'inline-block' : 'none';
 
     const studentFields = document.getElementById('profileStudentFields');
     const teacherFields = document.getElementById('profileTeacherFields');
@@ -2545,7 +2848,29 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('resetPasswordForm').addEventListener('submit', handlePasswordReset);
     document.getElementById('profileForm').addEventListener('submit', handleProfileSave);
 
-    ['resultModalOverlay','addClassModalOverlay','muetModalOverlay','resetPasswordModalOverlay','analysisModalOverlay','globalAnalysisModalOverlay'].forEach(id => {
+    // NEW: reassign modal form listener
+    const reassignForm = document.getElementById('reassignForm');
+    if (reassignForm) {
+        reassignForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const oldClass = document.getElementById('orphanOldClassSelect').value;
+            const newClass = document.getElementById('orphanNewClassSelect').value;
+            if (!oldClass || !newClass) {
+                showToast('Please choose both the orphaned class and a target class.', 'error');
+                return;
+            }
+            if (oldClass === newClass) {
+                showToast('Source and target class cannot be the same.', 'error');
+                return;
+            }
+            await reassignOrphanedStudents(oldClass, newClass);
+            closeReassignModal();
+        });
+    }
+
+    // Overlay click-outside handler — now includes reassignModalOverlay
+    ['resultModalOverlay','addClassModalOverlay','muetModalOverlay','resetPasswordModalOverlay',
+     'analysisModalOverlay','globalAnalysisModalOverlay','reassignModalOverlay'].forEach(id => {
         const overlay = document.getElementById(id);
         if (overlay) {
             overlay.addEventListener('click', function(e) {
@@ -2556,6 +2881,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     else if (id === 'resetPasswordModalOverlay') closeResetPasswordModal();
                     else if (id === 'analysisModalOverlay') closeAnalysisModal();
                     else if (id === 'globalAnalysisModalOverlay') closeGlobalAnalysisModal();
+                    else if (id === 'reassignModalOverlay') closeReassignModal();
                 }
             });
         }
