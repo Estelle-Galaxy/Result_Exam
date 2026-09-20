@@ -571,3 +571,22 @@ tr:last-child td {
   background-color: #e2e8f0;  /* light grey highlight */
   color: #000000;
 }
+
+/* Danger zone buttons */
+.btn-danger {
+    background: #dc2626;
+    color: #fff;
+    border: 1px solid #b91c1c;
+}
+.btn-danger:hover {
+    background: #b91c1c;
+}
+.section-divider {
+    margin-top: 24px;
+}
+
+/* Reassign modal preview */
+#orphanPreview {
+    min-height: 1.2em;
+    font-style: italic;
+}
