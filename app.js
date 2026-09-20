@@ -15,8 +15,41 @@ const db = firebase.firestore();
 // ========== GLOBAL STATE ==========
 let pendingRegistration = null;
 let verificationTimerInterval = null;
-let allStudentResults = [];               // stores all results of logged‑in student
-let studentRankingHTML = '';             // stores the ranking blocks for printing
+let currentSlipData = null;    // cached slip data so the term filter can re-render without refetching
+
+// ========== SHARED PRINT SLIP STYLES ==========
+// Used by both the student's own printable slip and the teacher-generated slip
+// so the two printouts are visually identical.
+const PRINT_SLIP_CSS = `
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 20px; color: #000; background: #fff; }
+        .print-header { display: flex; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+        .print-logo { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; }
+        .print-title-box { text-align: center; flex: 1; }
+        .print-title { font-size: 1.4rem; margin: 0; }
+        .print-subtitle { font-size: 0.9rem; color: #333; margin-top: 6px; }
+        .student-detail-print { margin-bottom: 16px; border: 1px solid #ccc; padding: 10px; background: #fafafa; }
+        .student-detail-print p { margin: 4px 0; font-size: 1rem; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f0f0f0; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; background: #e2e8f0; }
+        .term-heading, .result-summary, .status-container, h3, h4, h2 { color: #000; }
+        .mb-16 { margin-bottom: 16px; }
+        .mb-24 { margin-bottom: 24px; }
+        .mt-8 { margin-top: 8px; }
+        .mt-12 { margin-top: 12px; }
+        .fw-700 { font-weight: 700; }
+        .status-container { display: flex; gap: 12px; flex-wrap: wrap; }
+        .status-badge { padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc; }
+        .status-badge.green { background: #e7f6ec; border-color: #86d39a; }
+        .status-badge.blue { background: #e6eefc; border-color: #8fb8ef; }
+        .result-summary { padding: 6px 0; border-top: 1px solid #ccc; margin-top: 4px; }
+        .text-center { text-align: center; }
+        .text-light { color: #666; }
+        .flex-between, .btn, .toggle-password, .forgot-link, .modal-close, .modal-header-actions { display: none; }
+    </style>
+`;
 
 // ========== UTILITY FUNCTIONS ==========
 function showLoading() {
@@ -36,8 +69,6 @@ function showToast(message, type = 'info') {
 }
 
 // Escape user-supplied strings before injecting into HTML text/attributes.
-// Prevents apostrophes (e.g. O'Conner) or quotes/angle brackets from breaking
-// markup or executing as code.
 function escapeHTML(str) {
     if (str === null || str === undefined) return '';
     return String(str)
@@ -66,84 +97,56 @@ function navigateTo(pageId) {
     if (pageId === 'admin-verify') loadAdminCodes();
 }
 
-// ========== PRINT FUNCTION (UPDATED – includes student details) ==========
+// ========== ONE PRINT-WINDOW OPENER (shared by every print path) ==========
+function openPrintWindow({ title, subtitle = '', bodyHTML, studentDetails = null }) {
+    const win = window.open('', '_blank', 'width=900,height=700');
+    if (!win) {
+        showToast('Popup blocked. Please allow popups.', 'error');
+        return;
+    }
+
+    const logoImg = document.getElementById('appLogoImage');
+    const logoSrc = logoImg ? logoImg.src : '';
+    const logoHTML = logoSrc ? `<img class="print-logo" src="${logoSrc}" alt="Logo" />` : '';
+
+    const detailsHTML = studentDetails ? `
+        <div class="student-detail-print">
+            <p><strong>Student Name:</strong> ${escapeHTML(studentDetails.name)}</p>
+            <p><strong>IC No.:</strong> ${escapeHTML(studentDetails.id)}</p>
+            <p><strong>Class:</strong> ${escapeHTML(studentDetails.class)}</p>
+        </div>` : '';
+
+    win.document.write(`<!DOCTYPE html>
+        <html>
+        <head><title>${escapeHTML(title)}</title>${PRINT_SLIP_CSS}</head>
+        <body>
+            <div class="print-header">
+                ${logoHTML}
+                <div class="print-title-box">
+                    <h1 class="print-title">${escapeHTML(title)}</h1>
+                    ${subtitle ? `<p class="print-subtitle">${escapeHTML(subtitle)}</p>` : ''}
+                </div>
+            </div>
+            ${detailsHTML}${bodyHTML}
+        </body>
+        </html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); win.close(); }, 500);
+}
+
+// ========== ANALYSIS-MODAL PRINT (kept for the two analysis modals) ==========
 function printContent(areaId, reportTitle = 'Pusat Tingkatan Enam SMK Badin', reportSubtitle = '') {
     const printArea = document.getElementById(areaId);
     if (!printArea) {
         showToast('Nothing to print.');
         return;
     }
-
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-        showToast('Popup blocked. Please allow popups for this site.', 'error');
-        return;
-    }
-
-    const contentHTML = printArea.innerHTML;
-    let logoSrc = '';
-    const logoImg = document.getElementById('appLogoImage');
-    if (logoImg && logoImg.src) {
-        logoSrc = logoImg.src;
-    } else {
-        const fallbackImg = document.querySelector('.icon-circle img');
-        if (fallbackImg && fallbackImg.src) logoSrc = fallbackImg.src;
-    }
-
-    const logoHTML = logoSrc ? `<img class="print-logo" src="${logoSrc}" alt="Logo" />` : '';
-
-    let headerHTML = `
-        <div class="print-header">
-            ${logoHTML}
-            <div class="print-title-box">
-                <h1 class="print-title">${reportTitle}</h1>
-                ${reportSubtitle ? `<p class="print-subtitle">${reportSubtitle}</p>` : ''}
-            </div>
-        </div>
-    `;
-
-    if (areaId === 'studentResultsPrintArea') {
-        const userName = sessionStorage.getItem('userName') || '';
-        const userId = sessionStorage.getItem('userId') || '';
-        const userClass = sessionStorage.getItem('userClass') || '';
-        headerHTML += `
-            <div class="student-detail-print">
-                <p><strong>Student Name:</strong> ${escapeHTML(userName)}</p>
-                <p><strong>IC No.:</strong> ${escapeHTML(userId)}</p>
-                <p><strong>Class:</strong> ${escapeHTML(userClass)}</p>
-            </div>
-        `;
-    }
-
-    const printCSS = `
-        <style>
-            body { font-family: 'Segoe UI', sans-serif; margin: 20px; color: #000; background: #fff; }
-            .print-header { display: flex; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-            .print-logo { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; }
-            .print-title-box { text-align: center; flex: 1; }
-            .print-title { font-size: 1.4rem; margin: 0; }
-            .print-subtitle { font-size: 0.9rem; color: #333; margin-top: 6px; }
-            .student-detail-print { margin-bottom: 16px; border: 1px solid #ccc; padding: 10px; background: #fafafa; }
-            .student-detail-print p { margin: 4px 0; font-size: 1rem; }
-            table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
-            th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-            th { background: #f0f0f0; }
-            .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; background: #e2e8f0; }
-            .term-heading, .result-summary, .status-container, h3, h4, h2 { color: #000; }
-            .flex-between, .btn, .toggle-password, .forgot-link, .modal-close, .modal-header-actions { display: none; }
-        </style>
-    `;
-
-    printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head><title>Print</title>${printCSS}</head>
-        <body>${headerHTML}${contentHTML}</body>
-        </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
+    openPrintWindow({
+        title: reportTitle,
+        subtitle: reportSubtitle,
+        bodyHTML: printArea.innerHTML
+    });
 }
 
 // ========== PASSWORD TOGGLE (hold to show) ==========
@@ -189,7 +192,6 @@ async function handleStudentLogin(event) {
         document.getElementById('studentNameDisplay').textContent = studentData.name;
         document.getElementById('studentIdDisplay').textContent = `ID: ${studentId} | Class: ${studentData.class}`;
 
-        document.getElementById('muetDisplay').innerHTML = '';
         await loadStudentResults(studentId, studentData.class);
         navigateTo('student-results');
         showToast('Login successful!', 'success');
@@ -240,6 +242,7 @@ async function handleTeacherLogin(event) {
 
 function handleLogout() {
     sessionStorage.clear();
+    currentSlipData = null;
     navigateTo('main');
     showToast('Logged out successfully', 'info');
 }
@@ -297,7 +300,7 @@ async function handlePasswordReset(event) {
     hideLoading();
 }
 
-// ========== STUDENT RESULTS (WITH RANKINGS) ==========
+// ========== GRADE / NGP HELPERS ==========
 function getGrade(marks) {
     if (marks >= 80) return 'A';
     if (marks >= 70) return 'A-';
@@ -326,7 +329,7 @@ function getNGP(marks) {
     return 0.0;
 }
 
-// Helper to build the result tables (without ranking) – used for filtered print
+// ========== RESULT TABLE BUILDER (shared by student page + both slips) ==========
 function buildResultsHTML(results) {
     if (!results || results.length === 0) return '<p class="text-center text-light">No results found.</p>';
 
@@ -381,227 +384,164 @@ function buildResultsHTML(results) {
     return html;
 }
 
-// ========== FILTERED STUDENT PRINTING ==========
-function filterStudentResultsView() {
-    const term = document.getElementById('studentPrintTermFilter').value;
-    if (!allStudentResults.length) return;
-    const filtered = term ? allStudentResults.filter(r => r.term === term) : allStudentResults;
-    document.getElementById('studentResultsContent').innerHTML = buildResultsHTML(filtered) + studentRankingHTML;
+// ========== SLIP DATA GATHERING (the only async piece of the slip pipeline) ==========
+// Returns null if the student doesn't exist or has no results.
+async function gatherStudentSlipData(studentId, className) {
+    const studentDoc = await db.collection('students').doc(studentId).get();
+    if (!studentDoc.exists) return null;
+    const s = studentDoc.data();
+
+    const ownSnap = await db.collection('results').where('studentId', '==', studentId).get();
+    const results = ownSnap.docs.map(d => d.data());
+    if (results.length === 0) return null;
+
+    // One bulk fetch each — avoids Firestore's 10-value `in` cap
+    const [allStudentsSnap, allResultsSnap] = await Promise.all([
+        db.collection('students').get(),
+        db.collection('results').get()
+    ]);
+
+    const classOf = {};
+    allStudentsSnap.forEach(d => { classOf[d.id] = d.data().class; });
+
+    const ngp = {};
+    allResultsSnap.forEach(d => {
+        const r = d.data();
+        if (!ngp[r.studentId]) ngp[r.studentId] = { sum: 0, cnt: 0 };
+        ngp[r.studentId].sum += getNGP(r.marks);
+        ngp[r.studentId].cnt += 1;
+    });
+
+    const rankFor = (predicate) => {
+        const list = Object.entries(ngp)
+            .filter(([id, d]) => predicate(id) && d.cnt > 0)
+            .map(([id, d]) => ({ id, avg: d.sum / d.cnt }))
+            .sort((a, b) => b.avg - a.avg);
+        let rank = 1, prev = list[0]?.avg;
+        for (let i = 0; i < list.length; i++) {
+            if (list[i].avg < prev) { rank = i + 1; prev = list[i].avg; }
+            if (list[i].id === studentId) return { position: rank, size: list.length };
+        }
+        return { position: 'N/A', size: list.length };
+    };
+
+    const cls = rankFor(id => classOf[id] === className);
+    const all = rankFor(() => true);
+
+    const ownAvg = results.reduce((sum, r) => sum + getNGP(r.marks), 0) / results.length;
+    const status =
+        ownAvg >= 3.67 ? 'Excellent' :
+        ownAvg >= 3.00 ? 'Good' :
+        ownAvg >= 2.00 ? 'Satisfactory' : 'Needs Improvement';
+
+    return {
+        studentDetails: { name: s.name, id: studentId, class: className },
+        results,
+        muet: s.muet || null,
+        muetBand: s.muetBand || '',
+        classPosition: cls.position, classSize: cls.size,
+        overallPosition: all.position, totalStudents: all.size,
+        status
+    };
 }
 
-function printFilteredStudentResults() {
-    const term = document.getElementById('studentPrintTermFilter').value;
-    const printArea = document.getElementById('studentResultsPrintArea');
-    if (!printArea) return;
-
-    const filtered = term ? allStudentResults.filter(r => r.term === term) : allStudentResults;
-    const originalHTML = printArea.innerHTML;
-    printArea.innerHTML = buildResultsHTML(filtered) + studentRankingHTML;
-    printContent('studentResultsPrintArea', 'Pusat Tingkatan Enam SMK Badin', 'Keputusan Peperiksaan Keseluruhan');
-    printArea.innerHTML = originalHTML;
+// ========== SLIP HTML BUILDERS (pure) ==========
+function buildMuetBlock(data) {
+    if (data.muet) {
+        const m = data.muet;
+        return `<div class="badge badge-b" style="font-size:0.95rem; line-height:1.6;">
+            <strong>MUET</strong> – ${escapeHTML(m.band || data.muetBand)}<br>
+            <small>L: ${m.listening ?? '-'} | S: ${m.speaking ?? '-'} | R: ${m.reading ?? '-'} | W: ${m.writing ?? '-'} | Total: ${m.total ?? '-'}/300</small>
+        </div>`;
+    }
+    return data.muetBand
+        ? `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${escapeHTML(data.muetBand)}</div>`
+        : '';
 }
 
+function buildRankingBlock(data) {
+    return `
+    <div class="status-container mt-12">
+        <div class="status-badge green">
+            <strong>🏅 Class Position: ${data.classPosition}</strong> (based on NGP)
+        </div>
+        <div class="status-badge blue">
+            <strong>📊 Academic Status: ${data.status}</strong>
+        </div>
+    </div>
+    <div class="status-container mt-12">
+        <div class="status-badge green" style="border-color: #f59e0b; color: #fbbf24;">
+            <strong>🌍 Overall School Rank: ${data.overallPosition}</strong> out of ${data.totalStudents} students
+        </div>
+    </div>`;
+}
+
+// Assembles the body of a slip — MUET + results tables + ranking badges.
+// Passing filteredResults restricts the tables to a subset of terms (used by
+// the student page's term-filter dropdown); the ranking badges always reflect
+// the student's full record.
+function buildSlipBody(data, filteredResults) {
+    const muet = buildMuetBlock(data);
+    return `${muet ? `<div class="mb-16">${muet}</div>` : ''}${
+        buildResultsHTML(filteredResults || data.results)
+    }${buildRankingBlock(data)}`;
+}
+
+// ========== STUDENT RESULTS PAGE (uses the slip pipeline) ==========
 async function loadStudentResults(studentId, className) {
     const contentDiv = document.getElementById('studentResultsContent');
     contentDiv.innerHTML = '<p class="text-center text-light">Loading results...</p>';
 
-    try {
-        const ownSnap = await db.collection('results').where('studentId', '==', studentId).get();
-        allStudentResults = ownSnap.docs.map(doc => doc.data());
+    // The MUET block now lives inside studentResultsContent, so clear the
+    // legacy separate container if present.
+    const muetDiv = document.getElementById('muetDisplay');
+    if (muetDiv) muetDiv.innerHTML = '';
 
-        if (ownSnap.empty) {
+    try {
+        currentSlipData = await gatherStudentSlipData(studentId, className);
+
+        if (!currentSlipData) {
             contentDiv.innerHTML = '<p class="text-center text-light">No results found.</p>';
-            document.getElementById('muetDisplay').innerHTML = '';
-            studentRankingHTML = '';
             return;
         }
 
-        const grouped = {};
-        ownSnap.forEach(doc => {
-            const r = doc.data();
-            if (!grouped[r.term]) grouped[r.term] = [];
-            grouped[r.term].push(r);
-        });
-
-        let html = '';
-        let overallNgpTotal = 0;
-        let overallCount = 0;
-
-        for (const [term, results] of Object.entries(grouped)) {
-            let termNgpTotal = 0;
-            html += `
-            <div class="mb-24">
-                <h3 class="term-heading">${escapeHTML(term)}</h3>
-                <div class="table-wrapper">
-                    <table>
-                        <thead><tr><th>Subject</th><th>Percentage (%)</th><th>Grade</th><th>NGP</th></tr></thead>
-                        <tbody>`;
-            results.forEach(r => {
-                const grade = getGrade(r.marks);
-                const ngp = getNGP(r.marks);
-                termNgpTotal += ngp;
-                overallNgpTotal += ngp;
-                overallCount += 1;
-                html += `<tr>
-                    <td>${escapeHTML(r.subject)}</td>
-                    <td>${r.marks}</td>
-                    <td><span class="badge badge-${grade.toLowerCase().replace(/[^a-z]/g, '')}">${grade}</span></td>
-                    <td>${ngp.toFixed(2)}</td>
-                </tr>`;
-            });
-            const termAvgNgp = results.length ? (termNgpTotal / results.length).toFixed(2) : '0.00';
-            html += `</tbody></table></div>
-                <p class="fw-700 mt-8">Term Average NGP: ${termAvgNgp}</p>
-            </div>`;
-        }
-
-        let ownAvgNgp = 0;
-        if (overallCount > 0) {
-            ownAvgNgp = overallNgpTotal / overallCount;
-            html += `<div class="result-summary"><strong>Overall Average NGP: ${ownAvgNgp.toFixed(2)}</strong></div>`;
-        }
-
-        let classRankingHTML = '';
-        let overallRankingHTML = '';
-
-        // Class ranking
-        if (className) {
-            try {
-                const classResultsSnap = await db.collection('results').where('className', '==', className).get();
-                const studentNgpMap = {};
-                classResultsSnap.forEach(doc => {
-                    const r = doc.data();
-                    if (!studentNgpMap[r.studentId]) studentNgpMap[r.studentId] = { totalNgp: 0, count: 0 };
-                    studentNgpMap[r.studentId].totalNgp += getNGP(r.marks);
-                    studentNgpMap[r.studentId].count += 1;
-                });
-
-                const averages = Object.entries(studentNgpMap).map(([id, data]) => ({
-                    studentId: id,
-                    avgNgp: data.totalNgp / data.count
-                }));
-                averages.sort((a, b) => b.avgNgp - a.avgNgp);
-
-                let classPosition = 'N/A';
-                if (averages.length > 0) {
-                    let rank = 1;
-                    let prevAvg = averages[0].avgNgp;
-                    for (let i = 0; i < averages.length; i++) {
-                        if (averages[i].avgNgp < prevAvg) {
-                            rank = i + 1;
-                            prevAvg = averages[i].avgNgp;
-                        }
-                        if (averages[i].studentId === studentId) {
-                            classPosition = rank;
-                            break;
-                        }
-                    }
-                }
-
-                let status = '';
-                if (ownAvgNgp >= 3.67) status = 'Excellent';
-                else if (ownAvgNgp >= 3.00) status = 'Good';
-                else if (ownAvgNgp >= 2.00) status = 'Satisfactory';
-                else status = 'Needs Improvement';
-
-                classRankingHTML = `
-                <div class="status-container mt-12">
-                    <div class="status-badge green">
-                        <strong>🏅 Class Position: ${classPosition}</strong> (based on NGP)
-                    </div>
-                    <div class="status-badge blue">
-                        <strong>📊 Academic Status: ${status}</strong>
-                    </div>
-                </div>`;
-                html += classRankingHTML;
-            } catch (err) {
-                console.error('Class ranking error:', err);
-                html += '<p class="text-light">Could not calculate class ranking.</p>';
-            }
-        }
-
-        // Overall school ranking
-        try {
-            const allResultsSnap = await db.collection('results').get();
-            const allStudentNgpMap = {};
-            allResultsSnap.forEach(doc => {
-                const r = doc.data();
-                if (!allStudentNgpMap[r.studentId]) allStudentNgpMap[r.studentId] = { totalNgp: 0, count: 0 };
-                allStudentNgpMap[r.studentId].totalNgp += getNGP(r.marks);
-                allStudentNgpMap[r.studentId].count += 1;
-            });
-
-            const allAverages = Object.entries(allStudentNgpMap).map(([id, data]) => ({
-                studentId: id,
-                avgNgp: data.totalNgp / data.count
-            }));
-            allAverages.sort((a, b) => b.avgNgp - a.avgNgp);
-
-            let overallPosition = 'N/A';
-            let totalRanked = allAverages.length;
-            if (allAverages.length > 0) {
-                let rank = 1;
-                let prevAvg = allAverages[0].avgNgp;
-                for (let i = 0; i < allAverages.length; i++) {
-                    if (allAverages[i].avgNgp < prevAvg) {
-                        rank = i + 1;
-                        prevAvg = allAverages[i].avgNgp;
-                    }
-                    if (allAverages[i].studentId === studentId) {
-                        overallPosition = rank;
-                        break;
-                    }
-                }
-            }
-
-            overallRankingHTML = `
-            <div class="status-container mt-12">
-                <div class="status-badge green" style="border-color: #f59e0b; color: #fbbf24;">
-                    <strong>🌍 Overall School Rank: ${overallPosition}</strong> out of ${totalRanked} students
-                </div>
-            </div>`;
-            html += overallRankingHTML;
-        } catch (err) {
-            console.error('Overall ranking error:', err);
-            html += '<p class="text-light">Could not calculate overall school rank.</p>';
-        }
-
-        studentRankingHTML = classRankingHTML + overallRankingHTML;
-        contentDiv.innerHTML = html;
-
-        // MUET display
-        const stuDoc = await db.collection('students').doc(studentId).get();
-        let muetHTML = '';
-        if (stuDoc.exists) {
-            const muetData = stuDoc.data().muet;
-            if (muetData) {
-                const l = muetData.listening ?? '-';
-                const s = muetData.speaking ?? '-';
-                const r = muetData.reading ?? '-';
-                const w = muetData.writing ?? '-';
-                const total = muetData.total ?? '-';
-                const band = muetData.band || stuDoc.data().muetBand || '';
-                muetHTML = `
-                    <div class="badge badge-b" style="font-size:0.95rem; line-height:1.6;">
-                        <strong>MUET</strong> – ${escapeHTML(band)}<br>
-                        <small>L: ${l} | S: ${s} | R: ${r} | W: ${w} | Total: ${total}/300</small>
-                    </div>`;
-            } else {
-                const band = stuDoc.data().muetBand || null;
-                if (band) muetHTML = `<div class="badge badge-b" style="font-size:0.95rem;">MUET: ${escapeHTML(band)}</div>`;
-            }
-        }
-        document.getElementById('muetDisplay').innerHTML = muetHTML;
+        contentDiv.innerHTML = buildSlipBody(currentSlipData);
     } catch (error) {
         console.error('Error loading results:', error);
         contentDiv.innerHTML = '<p class="text-center error-text">Error loading results.</p>';
-        studentRankingHTML = '';
+        currentSlipData = null;
     }
 }
 
+function filterStudentResultsView() {
+    if (!currentSlipData) return;
+    const term = document.getElementById('studentPrintTermFilter').value;
+    const filtered = term
+        ? currentSlipData.results.filter(r => r.term === term)
+        : currentSlipData.results;
+    document.getElementById('studentResultsContent').innerHTML =
+        buildSlipBody(currentSlipData, filtered);
+}
+
+function printFilteredStudentResults() {
+    if (!currentSlipData) {
+        showToast('No results to print.', 'error');
+        return;
+    }
+    const term = document.getElementById('studentPrintTermFilter').value;
+    const filtered = term
+        ? currentSlipData.results.filter(r => r.term === term)
+        : currentSlipData.results;
+
+    openPrintWindow({
+        title: 'Pusat Tingkatan Enam SMK Badin',
+        subtitle: 'Keputusan Peperiksaan Keseluruhan',
+        bodyHTML: buildSlipBody(currentSlipData, filtered),
+        studentDetails: currentSlipData.studentDetails
+    });
+}
+
 // ========== TEACHER CLASSES & STUDENTS ==========
-// Uses data-* attributes + delegated event listeners so class names containing
-// apostrophes, quotes, or angle brackets cannot break the markup or the handlers.
 async function loadTeacherClasses() {
     const contentDiv = document.getElementById('classListContent');
     contentDiv.innerHTML = '<p class="text-center text-light">Loading classes...</p>';
@@ -631,7 +571,6 @@ async function loadTeacherClasses() {
         html += '</div>';
         contentDiv.innerHTML = html;
 
-        // Bind handlers after insertion — safe for any character in the values
         contentDiv.querySelectorAll('button[data-action]').forEach(btn => {
             btn.addEventListener('click', () => {
                 const action = btn.dataset.action;
@@ -861,24 +800,17 @@ async function deleteResult(resultId) {
 }
 
 // ========== STUDENT DELETION (teacher action) ==========
-// The only place a teacher can remove a student. Also cleans up:
-//   • the student doc
-//   • all their results
-//   • their ID in any class roster array
 async function deleteStudent(studentId, className) {
     if (!confirm(`Are you sure you want to permanently delete student "${studentId}"?\n\nThis will also delete all their results. This cannot be undone.`)) return;
     showLoading();
     try {
-        // 1. Delete student doc
         await db.collection('students').doc(studentId).delete();
 
-        // 2. Delete all their results
         const resultsSnap = await db.collection('results').where('studentId', '==', studentId).get();
         const batch = db.batch();
         resultsSnap.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
 
-        // 3. Remove their ID from any class roster array
         try {
             const classesSnap = await db.collection('classes').get();
             const classBatch = db.batch();
@@ -904,9 +836,7 @@ async function deleteStudent(studentId, className) {
     hideLoading();
 }
 
-// ========== STUDENT SELF-DELETE (own account) ==========
-// Only place a student can remove themselves. Removes student doc, results,
-// and roster entry. Does NOT touch any class or teacher records.
+// ========== STUDENT SELF-DELETE ==========
 async function deleteOwnStudentAccount() {
     const studentId = sessionStorage.getItem('userId');
     const userType  = sessionStorage.getItem('userType');
@@ -926,17 +856,14 @@ async function deleteOwnStudentAccount() {
 
     showLoading();
     try {
-        // 1. Delete results
         const resultsSnap = await db.collection('results')
             .where('studentId', '==', studentId).get();
         const batch = db.batch();
         resultsSnap.forEach(doc => batch.delete(doc.ref));
 
-        // 2. Delete student doc
         batch.delete(db.collection('students').doc(studentId));
         await batch.commit();
 
-        // 3. Remove from any class roster array
         try {
             const classesSnap = await db.collection('classes').get();
             const classBatch = db.batch();
@@ -954,6 +881,7 @@ async function deleteOwnStudentAccount() {
         }
 
         sessionStorage.clear();
+        currentSlipData = null;
         showToast('Your account has been deleted.', 'success');
         navigateTo('main');
     } catch (err) {
@@ -963,9 +891,7 @@ async function deleteOwnStudentAccount() {
     hideLoading();
 }
 
-// ========== TEACHER SELF-DELETE (own account) ==========
-// Only place a teacher can remove themselves. Removes only the teacher doc.
-// Never touches students or results.
+// ========== TEACHER SELF-DELETE ==========
 async function deleteOwnTeacherAccount() {
     const staffId  = sessionStorage.getItem('userId');
     const userType = sessionStorage.getItem('userType');
@@ -996,8 +922,7 @@ async function deleteOwnTeacherAccount() {
     hideLoading();
 }
 
-// ========== MUET MANAGEMENT (supports partial saves) ==========
-
+// ========== MUET MANAGEMENT ==========
 function showMuetModal(studentId, className) {
     document.getElementById('muetStudentId').value = studentId;
     document.getElementById('muetClassName').value = className;
@@ -1153,7 +1078,7 @@ async function handleSaveMuet(event) {
     hideLoading();
 }
 
-// ========== PER‑CLASS ANALYSIS (grade distribution per subject + STUDENT DATA WITH RANKS) ==========
+// ========== PER‑CLASS ANALYSIS ==========
 function openAnalysisModal() {
     const className = sessionStorage.getItem('currentClass');
     if (!className) {
@@ -1209,7 +1134,6 @@ async function runAnalysis() {
             return;
         }
 
-        // ---- Grade distribution ----
         const subjectData = {};
         filteredResults.forEach(r => {
             if (!subjectData[r.subject]) subjectData[r.subject] = [];
@@ -1277,7 +1201,6 @@ async function runAnalysis() {
             </div>`;
         }
 
-        // ---- Student data table with ranks ----
         const studentsMap = {};
         studentsSnap.forEach(doc => { studentsMap[doc.id] = doc.data().name; });
 
@@ -1306,7 +1229,6 @@ async function runAnalysis() {
             subjects: data.subjects
         }));
 
-        // Class ranking (based on filtered results)
         const sortedByAvg = [...studentRows].sort((a, b) => b.avgNgpNum - a.avgNgpNum);
         let classRank = 1;
         let prevAvg = sortedByAvg[0]?.avgNgpNum;
@@ -1319,10 +1241,7 @@ async function runAnalysis() {
             classRankMap[sortedByAvg[i].id] = classRank;
         }
 
-        // Overall school ranking (all students, all results).
-        // NOTE: we no longer use `where('studentId', 'in', allStudentIds)` because
-        // Firestore caps `in` at 10 values. Instead we read the whole results
-        // collection once and filter in memory.
+        // Overall rank — read all results once (avoids `in` cap)
         let overallRankMap = {};
         try {
             const allResSnap = await db.collection('results').get();
@@ -1374,7 +1293,7 @@ async function runAnalysis() {
     }
 }
 
-// ========== GLOBAL ANALYSIS (grade distribution per subject) ==========
+// ========== GLOBAL ANALYSIS ==========
 async function openGlobalAnalysisModal() {
     const role = sessionStorage.getItem('teacherRole');
     const homeroomClass = sessionStorage.getItem('homeroomClass');
@@ -1568,7 +1487,6 @@ async function handleSaveClass(event) {
             const isNameChanged = className !== originalClassName;
 
             if (isNameChanged) {
-                // 1. Make sure the new name isn't already taken
                 const existingDoc = await db.collection('classes').doc(className).get();
                 if (existingDoc.exists) {
                     showToast('A class with that name already exists', 'error');
@@ -1576,44 +1494,36 @@ async function handleSaveClass(event) {
                     return;
                 }
 
-                // 2. Fetch everything that still references the OLD class name
                 const [studentsSnap, resultsSnap, teachersSnap] = await Promise.all([
                     db.collection('students').where('class', '==', originalClassName).get(),
                     db.collection('results').where('className', '==', originalClassName).get(),
                     db.collection('teachers').where('homeroomClass', '==', originalClassName).get()
                 ]);
 
-                // 3. Apply all changes in one atomic batch
                 const batch = db.batch();
 
-                // Create the new class doc
                 batch.set(db.collection('classes').doc(className), {
                     name: className,
                     homeroomTeacher: homeroomTeacher,
                     createdAt: new Date().toISOString()
                 });
 
-                // Delete the old class doc
                 batch.delete(db.collection('classes').doc(originalClassName));
 
-                // Re-point every student
                 studentsSnap.forEach(doc => {
                     batch.update(doc.ref, { class: className });
                 });
 
-                // Re-point every result (they store className as a string)
                 resultsSnap.forEach(doc => {
                     batch.update(doc.ref, { className: className });
                 });
 
-                // Re-point any teacher whose homeroom was this class
                 teachersSnap.forEach(doc => {
                     batch.update(doc.ref, { homeroomClass: className });
                 });
 
                 await batch.commit();
 
-                // If the logged-in teacher's homeroom was the one renamed, update sessionStorage
                 if (sessionStorage.getItem('homeroomClass') === originalClassName) {
                     sessionStorage.setItem('homeroomClass', className);
                 }
@@ -1624,14 +1534,12 @@ async function handleSaveClass(event) {
                     'success'
                 );
             } else {
-                // Same name — just update the homeroom teacher
                 await db.collection('classes').doc(originalClassName).update({
                     homeroomTeacher: homeroomTeacher
                 });
                 showToast('Class updated successfully!', 'success');
             }
         } else {
-            // Create new class
             const existingDoc = await db.collection('classes').doc(className).get();
             if (existingDoc.exists) {
                 showToast('Class already exists', 'error');
@@ -1656,17 +1564,12 @@ async function handleSaveClass(event) {
 }
 
 // ========== CLASS DELETION (NON-DESTRUCTIVE TO STUDENTS) ==========
-// Deletes ONLY the class document. Students, results, and teachers are preserved.
-// Teachers whose homeroomClass pointed to this class get that field cleared
-// (their account is preserved). Orphaned students can be reassigned afterwards
-// via reassignOrphanedStudents().
 async function deleteClass(className) {
     if (!className) return;
 
     showLoading();
     let enrolledCount = 0;
     try {
-        // Just COUNT enrolled students — we will never delete them here.
         const studentsSnap = await db.collection('students')
             .where('class', '==', className).get();
         enrolledCount = studentsSnap.size;
@@ -1689,11 +1592,8 @@ async function deleteClass(className) {
 
     showLoading();
     try {
-        // Remove ONLY the class document. Students/results/teachers are untouched.
         await db.collection('classes').doc(className).delete();
 
-        // Tidy up: remove this class from any teacher's homeroomClass field
-        // (again: teachers are NOT deleted, just unassigned).
         try {
             const homeroomSnap = await db.collection('teachers')
                 .where('homeroomClass', '==', className).get();
@@ -1721,15 +1621,12 @@ async function deleteClass(className) {
 }
 
 // ========== ORPHANED STUDENT REASSIGNMENT ==========
-// Moves students whose `class` field still points to a deleted class into a new class.
-// Students are UPDATED, never deleted. Results are updated to keep className in sync.
 async function reassignOrphanedStudents(oldClassName, newClassName) {
     if (!oldClassName || !newClassName) {
         showToast('Both old and new class names are required.', 'error');
         return;
     }
 
-    // Make sure the new class exists
     const newDoc = await db.collection('classes').doc(newClassName).get();
     if (!newDoc.exists) {
         showToast(`Target class "${newClassName}" does not exist.`, 'error');
@@ -1749,12 +1646,10 @@ async function reassignOrphanedStudents(oldClassName, newClassName) {
 
         const batch = db.batch();
 
-        // 1. Reassign each student (students are UPDATED, never deleted)
         studentsSnap.forEach(doc => {
             batch.update(doc.ref, { class: newClassName });
         });
 
-        // 2. Keep results in sync (they store className as a string)
         const resultsSnap = await db.collection('results')
             .where('className', '==', oldClassName).get();
         resultsSnap.forEach(doc => {
@@ -1776,10 +1671,6 @@ async function reassignOrphanedStudents(oldClassName, newClassName) {
 }
 
 // ========== REASSIGN ORPHANED STUDENTS (UI) ==========
-// Opens the reassign modal, populates the two dropdowns:
-//   • "Old Class" — orphaned classes (student.class values that no longer
-//     exist in the classes collection)
-//   • "Move to Class" — every existing class
 async function openReassignModal() {
     const oldSelect = document.getElementById('orphanOldClassSelect');
     const newSelect = document.getElementById('orphanNewClassSelect');
@@ -1791,7 +1682,6 @@ async function openReassignModal() {
     if (preview) preview.textContent = '';
 
     try {
-        // 1. Existing classes (targets)
         const classesSnap = await db.collection('classes').get();
         const existingClasses = classesSnap.docs.map(d => d.id).sort();
 
@@ -1802,8 +1692,6 @@ async function openReassignModal() {
             newSelect.appendChild(opt);
         });
 
-        // 2. Orphaned classes = distinct `class` values on students that
-        //    do NOT exist in the classes collection.
         const studentsSnap = await db.collection('students').get();
         const orphanCounts = {};
         studentsSnap.forEach(doc => {
@@ -1827,7 +1715,6 @@ async function openReassignModal() {
             });
         }
 
-        // Live preview when user picks an old class
         oldSelect.onchange = () => {
             const chosen = oldSelect.value;
             if (preview) {
@@ -1866,7 +1753,6 @@ async function openProfile() {
     document.getElementById('profileUserType').value = userType;
     document.getElementById('profileUserId').value = userId;
 
-    // Show the correct self-delete button for the logged-in user
     const delStuBtn = document.getElementById('deleteStudentAccountBtn');
     const delTchBtn = document.getElementById('deleteTeacherAccountBtn');
     if (delStuBtn) delStuBtn.style.display = (userType === 'student') ? 'inline-block' : 'none';
@@ -1956,8 +1842,6 @@ async function handleProfileSave(event) {
     const name = document.getElementById('profileName').value.trim();
     const newPassword = document.getElementById('profileNewPassword').value;
 
-    console.log('handleProfileSave called', { userType, userId, name, newPassword });
-
     if (!name) {
         showToast('Name is required.', 'error');
         return;
@@ -1996,7 +1880,6 @@ async function handleProfileSave(event) {
 
     showLoading();
     try {
-        console.log('Profile update payload', { collection: userType === 'student' ? 'students' : 'teachers', userId, updateData });
         const collectionName = userType === 'student' ? 'students' : 'teachers';
         await db.collection(collectionName).doc(userId).update(updateData);
 
@@ -2091,7 +1974,6 @@ async function loadHomeroomClassOptions() {
 }
 
 // ========== NEW VERIFICATION FLOW ==========
-
 function registrationRequest(userType) {
     return async function(e) {
         e.preventDefault();
@@ -2323,8 +2205,7 @@ async function deleteCode(id) {
     }
 }
 
-// ========== PRINTABLE STUDENT RANKING REPORT (DUAL MODE – UPDATED WITH RANKS) ==========
-
+// ========== PRINTABLE STUDENT RANKING REPORT (DUAL MODE) ==========
 function printStudentRankingFromClass() {
     const className = sessionStorage.getItem('currentClass');
     const term = document.getElementById('analysisTermFilter').value;
@@ -2395,7 +2276,6 @@ async function printStudentRanking(className, term) {
 
             const studentList = Object.values(studentData);
 
-            // Class ranking (based on filtered results)
             const sortedByAvg = [...studentList].sort((a, b) => {
                 const avgA = a.ngpCount ? (a.ngpTotal / a.ngpCount) : 0;
                 const avgB = b.ngpCount ? (b.ngpTotal / b.ngpCount) : 0;
@@ -2413,9 +2293,6 @@ async function printStudentRanking(className, term) {
                 classRankMap[sortedByAvg[i].id] = cRank;
             }
 
-            // Overall school ranking (all students, all results, all terms).
-            // NOTE: we no longer use `where('studentId', 'in', allStudentIds)`
-            // (Firestore caps `in` at 10). Read all results once instead.
             let overallRankMap = {};
             try {
                 const allResSnap = await db.collection('results').get();
@@ -2441,7 +2318,6 @@ async function printStudentRanking(className, term) {
                 console.error('Overall ranking error:', err);
             }
 
-            // Sort studentList by name for report
             studentList.sort((a, b) => a.name.localeCompare(b.name));
 
             const allSubjects = new Set();
@@ -2520,8 +2396,7 @@ async function printStudentRanking(className, term) {
         }
 
         // ---------- MODE 2: ALL CLASSES → RANKING REPORT ----------
-        let studentsQuery = db.collection('students');
-        const studentsSnap = await studentsQuery.get();
+        const studentsSnap = await db.collection('students').get();
         if (studentsSnap.empty) {
             showToast('No students found.', 'error');
             hideLoading();
@@ -2723,154 +2598,30 @@ async function printStudentRanking(className, term) {
     hideLoading();
 }
 
-// ========== INDIVIDUAL STUDENT SLIP (with class & overall ranking) ==========
-// REWRITTEN: no longer uses `where('studentId', 'in', ...)` (Firestore caps
-// `in` at 10 values). Fetches all students and all results once, then filters
-// in memory. Handles empty classes and ties correctly.
+// ========== INDIVIDUAL STUDENT SLIP (teacher action) ==========
+// Uses the exact same slip pipeline the student sees: gatherStudentSlipData →
+// buildSlipBody → openPrintWindow. The teacher only supplies the target
+// student's ID and class; everything else is generated identically.
 async function printStudentSlip(studentId, className) {
     showLoading();
     try {
-        // 1. Student doc
-        const studentDoc = await db.collection('students').doc(studentId).get();
-        if (!studentDoc.exists) {
-            showToast('Student not found.', 'error');
-            hideLoading();
+        const data = await gatherStudentSlipData(studentId, className);
+        if (!data) {
+            showToast('This student has no results yet.', 'error');
             return;
         }
-        const studentData = studentDoc.data();
-        const studentName = studentData.name;
-
-        // 2. This student's own results
-        const ownResultsSnap = await db.collection('results')
-            .where('studentId', '==', studentId).get();
-        const studentResults = ownResultsSnap.docs.map(doc => doc.data());
-
-        // 3. Fetch ALL students + ALL results once, then filter in memory.
-        //    (Avoids Firestore's 10-item limit on `in` queries.)
-        const [allStudentsSnap, allResultsSnap] = await Promise.all([
-            db.collection('students').get(),
-            db.collection('results').get()
-        ]);
-
-        const allStudentsMap = {};     // id -> { name, class }
-        allStudentsSnap.forEach(doc => {
-            allStudentsMap[doc.id] = { name: doc.data().name, class: doc.data().class };
+        openPrintWindow({
+            title: 'Pusat Tingkatan Enam SMK Badin',
+            subtitle: 'Keputusan Peperiksaan Keseluruhan',
+            bodyHTML: buildSlipBody(data),
+            studentDetails: data.studentDetails
         });
-
-        // Build NGP averages per student
-        const ngpByStudent = {};       // id -> { totalNgp, count }
-        allResultsSnap.forEach(doc => {
-            const r = doc.data();
-            if (!ngpByStudent[r.studentId]) ngpByStudent[r.studentId] = { totalNgp: 0, count: 0 };
-            ngpByStudent[r.studentId].totalNgp += getNGP(r.marks);
-            ngpByStudent[r.studentId].count += 1;
-        });
-
-        // 4. Class ranking — only students whose class matches
-        const classAverages = [];
-        for (const [id, data] of Object.entries(ngpByStudent)) {
-            const stu = allStudentsMap[id];
-            if (!stu || stu.class !== className) continue;
-            if (data.count === 0) continue;
-            classAverages.push({ id, avgNgp: data.totalNgp / data.count });
-        }
-        classAverages.sort((a, b) => b.avgNgp - a.avgNgp);
-
-        let classRank = 0;
-        const classSize = classAverages.length;
-        let prevClassAvg = classAverages[0]?.avgNgp;
-        let runningRank = 1;
-        for (let i = 0; i < classAverages.length; i++) {
-            if (classAverages[i].avgNgp < prevClassAvg) {
-                runningRank = i + 1;
-                prevClassAvg = classAverages[i].avgNgp;
-            }
-            if (classAverages[i].id === studentId) {
-                classRank = runningRank;
-                break;
-            }
-        }
-
-        // 5. Overall school ranking — everyone
-        const overallAverages = Object.entries(ngpByStudent)
-            .filter(([, d]) => d.count > 0)
-            .map(([id, d]) => ({ id, avgNgp: d.totalNgp / d.count }));
-        overallAverages.sort((a, b) => b.avgNgp - a.avgNgp);
-
-        let overallRank = 0;
-        const totalStudents = overallAverages.length;
-        let prevOverallAvg = overallAverages[0]?.avgNgp;
-        let runningOverall = 1;
-        for (let i = 0; i < overallAverages.length; i++) {
-            if (overallAverages[i].avgNgp < prevOverallAvg) {
-                runningOverall = i + 1;
-                prevOverallAvg = overallAverages[i].avgNgp;
-            }
-            if (overallAverages[i].id === studentId) {
-                overallRank = runningOverall;
-                break;
-            }
-        }
-
-        const classRankText = classRank || 'N/A';
-        const overallRankText = overallRank || 'N/A';
-
-        // 6. Build the slip HTML
-        let slipHTML = `<div style="font-family: 'Segoe UI', sans-serif; padding: 20px; max-width: 800px;">
-            <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
-                <h1>Pusat Tingkatan Enam SMK Badin</h1>
-                <h2>Student Examination Slip</h2>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-                <div><strong>Name:</strong> ${escapeHTML(studentName)}</div>
-                <div><strong>IC No.:</strong> ${escapeHTML(studentId)}</div>
-                <div><strong>Class:</strong> ${escapeHTML(className)}</div>
-            </div>
-            <div style="display: flex; justify-content: space-around; margin-bottom: 20px; background: #f8f9fa; padding: 10px; border: 1px solid #ccc;">
-                <div>🏅 <strong>Class Rank:</strong> ${classRankText} / ${classSize}</div>
-                <div>🌍 <strong>Overall School Rank:</strong> ${overallRankText} / ${totalStudents}</div>
-            </div>
-            <table style="border-collapse: collapse; width: 100%;">
-                <thead>
-                    <tr style="background: #f0f0f0;">
-                        <th>Subject</th><th>Term</th><th>Marks</th><th>Grade</th><th>NGP</th>
-                    </tr>
-                </thead>
-                <tbody>`;
-
-        studentResults.forEach(r => {
-            slipHTML += `<tr>
-                <td>${escapeHTML(r.subject)}</td>
-                <td>${escapeHTML(r.term)}</td>
-                <td>${r.marks}</td>
-                <td>${getGrade(r.marks)}</td>
-                <td>${getNGP(r.marks).toFixed(2)}</td>
-            </tr>`;
-        });
-        slipHTML += `</tbody></table>`;
-
-        if (studentData.muet && studentData.muet.band) {
-            slipHTML += `<div style="margin-top: 20px;"><strong>MUET Band:</strong> ${escapeHTML(studentData.muet.band)}</div>`;
-        }
-
-        slipHTML += `</div>`;
-
-        const printWindow = window.open('', '_blank', 'width=900,height=700');
-        if (!printWindow) {
-            showToast('Popup blocked. Please allow popups.', 'error');
-            hideLoading();
-            return;
-        }
-
-        printWindow.document.write(`<!DOCTYPE html><html><head><title>Exam Slip</title></head><body>${slipHTML}</body></html>`);
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => { printWindow.print(); printWindow.close(); }, 800);
     } catch (error) {
         console.error('Error generating slip:', error);
         showToast('Failed to generate slip: ' + (error.message || 'unknown error'), 'error');
+    } finally {
+        hideLoading();
     }
-    hideLoading();
 }
 
 // ========== INITIAL SETUP & EVENT BINDING ==========
@@ -2887,7 +2638,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('resetPasswordForm').addEventListener('submit', handlePasswordReset);
     document.getElementById('profileForm').addEventListener('submit', handleProfileSave);
 
-    // Reassign modal form listener
     const reassignForm = document.getElementById('reassignForm');
     if (reassignForm) {
         reassignForm.addEventListener('submit', async (e) => {
@@ -2907,7 +2657,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Overlay click-outside handler
     ['resultModalOverlay','addClassModalOverlay','muetModalOverlay','resetPasswordModalOverlay',
      'analysisModalOverlay','globalAnalysisModalOverlay','reassignModalOverlay'].forEach(id => {
         const overlay = document.getElementById(id);
